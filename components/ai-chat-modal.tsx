@@ -197,24 +197,24 @@ export const AiChatModal = ({
       <div
         ref={modalRef}
         className={cn(
-          "bg-white dark:bg-gray-900 rounded-lg shadow-2xl w-[600px] max-h-[500px] flex flex-col",
-          "border border-gray-200 dark:border-gray-700",
+          "bg-background/60 backdrop-blur-xl rounded-lg shadow-2xl w-[600px] max-h-[500px] flex flex-col",
+          "border border-border",
           "animate-in fade-in slide-in-from-top-2 duration-200"
         )}
       >
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <Sparkles className="w-5 h-5 text-purple-500" />
-          <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+          <Sparkles className="w-5 h-5 text-rose-600" />
+          <h3 className="font-semibold text-foreground">
             AI Assistant
           </h3>
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs text-gray-500">Press ESC to close</span>
+            <span className="text-xs text-muted-foreground">Press ESC to close</span>
             <button
               onClick={onClose}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+              className="p-1 hover:bg-muted rounded text-muted-foreground"
             >
-              <X className="w-4 h-4 text-gray-500" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -239,8 +239,8 @@ export const AiChatModal = ({
                   className={cn(
                     "max-w-[80%] rounded-lg px-4 py-2",
                     message.role === "user"
-                      ? "bg-purple-500 text-white"
-                      : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                      ? "bg-rose-600 text-white"
+                      : "bg-muted text-foreground"
                   )}
                 >
                   <p className="text-sm whitespace-pre-wrap">
@@ -252,8 +252,8 @@ export const AiChatModal = ({
           )}
           {isLoading && messages[messages.length - 1]?.role === "user" && (
             <div className="flex gap-3 justify-start">
-              <div className="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+              <div className="bg-muted rounded-lg px-4 py-2">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               </div>
             </div>
           )}
@@ -263,7 +263,7 @@ export const AiChatModal = ({
         {/* Input */}
         <form
           onSubmit={handleSubmit}
-          className="border-t border-gray-200 dark:border-gray-700 p-4"
+          className="border-t border-border p-4"
         >
           <div className="flex gap-2">
             <input
@@ -273,7 +273,7 @@ export const AiChatModal = ({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Ask AI to write, edit, or continue..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="flex-1 px-3 py-2 text-sm border border-input rounded-md bg-transparent text-foreground focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
               disabled={isLoading}
               autoComplete="off"
             />
@@ -281,12 +281,12 @@ export const AiChatModal = ({
               type="submit"
               size="sm"
               disabled={isLoading || !input.trim()}
-              className="bg-purple-500 hover:bg-purple-600 disabled:opacity-50"
+              className="bg-transparent hover:bg-rose-700 disabled:opacity-50"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                <Send className="w-4 h-4" />
+                <Send className="w-4 h-4 dark:text-white" />
               )}
             </Button>
             {messages.some((m) => m.role === "assistant" && m.content) && (
@@ -294,6 +294,7 @@ export const AiChatModal = ({
                 type="button"
                 size="sm"
                 variant="outline"
+                className="border-2 border-rose-600"
                 onClick={handleInsert}
                 disabled={isLoading}
               >
