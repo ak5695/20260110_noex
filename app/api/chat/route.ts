@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
 import { streamText } from "ai";
 
 // Allow streaming responses up to 30 seconds
@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   const { messages } = await req.json();
 
   const result = await streamText({
-    model: openai("gpt-4-turbo"),
+    model: google("gemini-1.5-flash"),
     messages,
     system: `You are a helpful AI writing assistant integrated into a Notion-like document editor.
 
