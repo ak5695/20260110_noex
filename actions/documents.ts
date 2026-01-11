@@ -59,6 +59,35 @@ export const archive = async (id: string) => {
         updatedAt: new Date()
     }).where(eq(documents.id, id)).returning()
 
+    // Notion-like: Remove from parent content if it was a subpage
+    if (archived.parentDocumentId) {
+        try {
+            const parent = await getDocumentWithVersion(archived.parentDocumentId, user.id);
+            if (parent && parent.content) {
+                let content = JSON.parse(parent.content);
+                if (Array.isArray(content)) {
+                    const newContent = content.filter((block: any) =>
+                        !(block.type === "page" && block.props?.pageId === id)
+                    );
+
+                    if (newContent.length !== content.length) {
+                        await safeUpdateDocument({
+                            documentId: parent.id,
+                            updates: { content: JSON.stringify(newContent) },
+                            options: {
+                                expectedVersion: parent.version,
+                                userId: user.id,
+                            },
+                        });
+                        await documentCache.invalidate(parent.id);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[NotionSync] Parent unlink failed:", e);
+        }
+    }
+
     // Archive all children
     await recursiveArchive(id)
 
@@ -100,7 +129,55 @@ export const create = async (args: { title: string, parentDocumentId?: string })
         parentDocumentId: args.parentDocumentId,
     })
 
+    // Notion-like: If created inside a parent, add a "page" block to parent content
+    if (args.parentDocumentId) {
+        try {
+            const parent = await getDocumentWithVersion(args.parentDocumentId, user.id);
+            if (parent) {
+                let content: any[] = [];
+                try {
+                    content = parent.content ? JSON.parse(parent.content) : [];
+                } catch (e) {
+                    content = [];
+                }
+
+                // Append reference block (type: page)
+                const pageBlock = {
+                    id: Math.random().toString(36).substring(2, 11),
+                    type: "page",
+                    props: {
+                        backgroundColor: "default",
+                        textColor: "default",
+                        textAlignment: "left",
+                        pageId: newDoc.id,
+                        title: args.title
+                    },
+                    children: []
+                };
+
+                content.push(pageBlock);
+
+                await safeUpdateDocument({
+                    documentId: parent.id,
+                    updates: { content: JSON.stringify(content) },
+                    options: {
+                        expectedVersion: parent.version,
+                        userId: user.id
+                    }
+                });
+
+                // Invalidate parent cache
+                await documentCache.invalidate(parent.id);
+            }
+        } catch (error) {
+            console.error("[NotionSync] Parent link injection failed:", error);
+        }
+    }
+
     revalidatePath("/documents")
+    if (args.parentDocumentId) {
+        revalidatePath(`/documents/${args.parentDocumentId}`);
+    }
     return newDoc
 }
 
@@ -191,6 +268,34 @@ export const remove = async (id: string) => {
     if (!existing) throw new Error("Not found")
 
     const [deleted] = await db.delete(documents).where(eq(documents.id, id)).returning()
+
+    // Notion-like: Remove from parent content on permanent delete
+    if (deleted.parentDocumentId) {
+        try {
+            const parent = await getDocumentWithVersion(deleted.parentDocumentId, user.id);
+            if (parent && parent.content) {
+                let content = JSON.parse(parent.content);
+                if (Array.isArray(content)) {
+                    const newContent = content.filter((block: any) =>
+                        !(block.type === "page" && block.props?.pageId === id)
+                    );
+                    if (newContent.length !== content.length) {
+                        await safeUpdateDocument({
+                            documentId: parent.id,
+                            updates: { content: JSON.stringify(newContent) },
+                            options: {
+                                expectedVersion: parent.version,
+                                userId: user.id
+                            }
+                        });
+                        await documentCache.invalidate(parent.id);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[NotionSync] Permanent unlink failed:", e);
+        }
+    }
 
     // Invalidate from cache after deletion
     await documentCache.invalidate(id)

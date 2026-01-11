@@ -8,6 +8,7 @@ import {
   Search,
   Settings,
   Trash,
+  Palette,
 } from "lucide-react";
 import React, {
   ElementRef,
@@ -153,6 +154,7 @@ export const Navigation = () => {
           <Item onClick={search.onOpen} label="Search" icon={Search} isSearch />
           <Item onClick={settings.onOpen} label="Settings" icon={Settings} />
           <Item onClick={handleCreate} label="New Page" icon={PlusCircle} />
+          <Item onClick={() => router.push("/canvas")} label="Canvas" icon={Palette} />
         </div>
         <div className="mt-4">
           <DocumentList />

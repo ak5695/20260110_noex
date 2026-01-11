@@ -3,17 +3,20 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { BlockNoteEditor, Selection } from "@blocknote/core";
-import { useCreateBlockNote, FormattingToolbarController, GenericPopover } from "@blocknote/react";
+import { useCreateBlockNote, FormattingToolbarController, GenericPopover, createReactBlockSpec, createReactStyleSpec, SuggestionMenuController, getDefaultReactSlashMenuItems } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import "@blocknote/core/fonts/inter.css";
 import { SemanticCommandPalette } from "./semantic-command-palette";
 import { toast } from "sonner";
-import {
-  defaultStyleSpecs,
-  createStyleSpec,
-  BlockNoteSchema,
-  defaultBlockSpecs
+import { Loader2, Zap, FileIcon, FilePlus } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import useSWR from "swr";
+import { getById } from "@/actions/documents";
+defaultBlockSpecs,
+  defaultProps,
+  filterSuggestionItems,
 } from "@blocknote/core";
 import {
   createManualAnchor,
@@ -21,11 +24,165 @@ import {
   rejectAiSuggestion,
   renameNode
 } from "@/actions/anchors";
-import { db } from "@/db";
-import { nodeSourceAnchors, semanticNodes } from "@/db/schema";
-import { and, eq } from "drizzle-orm";
+import { create as serverCreateDocument } from "@/actions/documents";
 import { useSemanticSync } from "@/store/use-semantic-sync";
-import { ExcalidrawBlock } from "./excalidraw-block";
+
+// Dynamic import for Excalidraw
+const Excalidraw = dynamic(
+  () => import("@excalidraw/excalidraw").then((mod) => mod.Excalidraw),
+  { ssr: false }
+);
+
+/**
+ * Excalidraw 语义化方块
+ */
+/**
+ * Excalidraw 语义化方块
+ */
+const ExcalidrawBlock = createReactBlockSpec(
+  {
+    type: "excalidraw",
+    propSchema: {
+      backgroundColor: { default: "default" },
+      textColor: { default: "default" },
+      textAlignment: { default: "left", values: ["left", "center", "right", "justify"] as const },
+      data: { default: "[]" },
+    },
+    content: "none",
+  },
+  {
+    render: ({ block, editor }) => {
+      const { resolvedTheme } = useTheme();
+      const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
+
+      const handleChange = (elements: any) => {
+        editor.updateBlock(block, {
+          type: "excalidraw",
+          props: { data: JSON.stringify(elements) },
+        });
+      };
+
+      const handleCaptureSemantic = async () => {
+        if (!excalidrawAPI) return;
+        const selectedElements = excalidrawAPI.getSelectedElements();
+        const textElements = selectedElements.filter((el: any) => el.type === "text");
+
+        if (textElements.length === 0) {
+          toast.error("Please select a text element on the canvas first");
+          return;
+        }
+
+        const keyword = textElements[0].text;
+        const nodeId = textElements[0].id;
+
+        toast.loading(`Capturing "${keyword}"...`, { id: "excalidraw-sync" });
+
+        try {
+          const res = await createManualAnchor({
+            blockId: block.id,
+            documentId: (editor as any)._documentId || "",
+            userId: (editor as any)._userId || "",
+            title: keyword,
+            type: "concept",
+            startOffset: 0,
+            endOffset: keyword.length,
+            blockText: "[Canvas Content]",
+            blockType: "excalidraw",
+            metadata: {
+              source: "excalidraw",
+              elementId: nodeId,
+              capturedAt: new Date().toISOString(),
+              documentId: (editor as any)._documentId
+            }
+          });
+
+          if (res.success) {
+            toast.success(`Concept "${keyword}" unified`, { id: "excalidraw-sync" });
+          }
+        } catch (error) {
+          toast.error("Capture failed", { id: "excalidraw-sync" });
+        }
+      };
+
+      return (
+        <div className="relative w-full h-[500px] border border-white/5 rounded-xl overflow-hidden group/canvas bg-background shadow-inner">
+          <div className="absolute top-2 right-2 z-50 flex gap-2 opacity-0 group-hover/canvas:opacity-100 transition-opacity">
+            <button
+              onClick={handleCaptureSemantic}
+              className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/40 border border-purple-500/30 rounded-lg backdrop-blur-md text-[10px] font-bold uppercase tracking-wider text-purple-200 transition-all"
+            >
+              <Zap className="w-3 h-3 fill-current" />
+              Mark Concept
+            </button>
+          </div>
+
+          <Excalidraw
+            excalidrawAPI={(api: any) => setExcalidrawAPI(api)}
+            initialData={{
+              elements: JSON.parse(block.props.data || "[]"),
+              appState: { theme: resolvedTheme === "dark" ? "dark" : "light" }
+            }}
+            onChange={handleChange}
+            theme={resolvedTheme === "dark" ? "dark" : "light"}
+          />
+        </div>
+      );
+    },
+  }
+);
+
+/**
+ * Page Block: 仿 Notion 的子页面入口
+ */
+const PageBlock = createReactBlockSpec(
+  {
+    type: "page",
+    propSchema: {
+      ...defaultProps,
+      pageId: { default: "" },
+      title: { default: "Untitled" },
+    },
+    content: "none",
+  },
+  {
+    render: ({ block }) => {
+      const router = useRouter();
+      const { data: pageData } = useSWR(
+        block.props.pageId ? `page-${block.props.pageId}` : null,
+        () => getById(block.props.pageId)
+      );
+
+      const title = pageData?.title || block.props.title || "Untitled";
+
+      return (
+        <div
+          onClick={() => router.push(`/documents/${block.props.pageId}`)}
+          className="flex items-center gap-x-3 w-full p-2.5 my-1 rounded-xl bg-muted/30 hover:bg-muted/60 dark:bg-white/5 dark:hover:bg-white/10 cursor-pointer group transition-all border border-border/20 hover:border-border/60 hover:shadow-sm"
+        >
+          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-background border border-border/40 shadow-sm group-hover:scale-110 transition-transform">
+            {pageData?.icon ? (
+              <span className="text-lg">{pageData.icon}</span>
+            ) : (
+              <FileIcon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5 overflow-hidden">
+            <span className="font-semibold text-sm text-foreground/90 group-hover:text-foreground transition-colors truncate">
+              {title}
+            </span>
+            <span className="text-[10px] text-muted-foreground/60 uppercase tracking-tight">
+              Sub-Page
+            </span>
+          </div>
+          <div className="ml-auto flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+            <Zap className="h-3 w-3 text-purple-500/50" />
+            <div className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] font-bold">OPEN</div>
+          </div>
+        </div>
+      );
+    },
+  }
+);
 
 interface EditorProps {
   onChange: (value: string) => void;
@@ -36,43 +193,42 @@ interface EditorProps {
 }
 
 // 1. 定义语义主权自定义样式
-const SemanticStyle = createStyleSpec(
+const SemanticStyle = createReactStyleSpec(
   {
     type: "semantic",
-    propSpecs: {
-      anchorId: { default: "" },
-      nodeId: { default: "" },
-      provenance: { default: "AI" },
-      isLocked: { default: "false" },
-    },
+    propSchema: "string",
   },
   {
-    render: (props) => {
-      const isLocked = props.isLocked === "true";
-      const isAi = props.provenance === "AI";
-      const isRejected = props.provenance === "USER_REJECTED";
+    render: ({ value, children, contentRef }) => {
+      // Parse semantic data from JSON string
+      let data = { anchorId: "", nodeId: "", provenance: "AI", isLocked: "false" };
+      try {
+        if (value) data = JSON.parse(value);
+      } catch (e) { }
+
+      const isLocked = data.isLocked === "true";
+      const isAi = data.provenance === "AI";
+      const isRejected = data.provenance === "USER_REJECTED";
 
       let className = "px-0.5 rounded-sm transition-all duration-300 ";
 
       if (isLocked && !isRejected) {
-        // 主权锁定状态：紫色坚固感
         className += "bg-purple-500/10 border-b-2 border-purple-500/50 shadow-[0_2px_4px_rgba(168,85,247,0.1)]";
       } else if (isRejected) {
-        // 被拒绝状态：红色警示
         className += "bg-rose-500/10 border-b-2 border-rose-500/30 line-through decoration-rose-500/50";
       } else if (isAi) {
-        // AI 建议状态：琥珀色呼吸虚线
         className += "bg-amber-500/5 border-b-2 border-dashed border-amber-500/40 hover:bg-amber-500/10 animate-pulse";
       }
 
       return (
         <span
+          ref={contentRef}
           className={className}
-          data-anchor-id={props.anchorId}
-          data-node-id={props.nodeId}
-          data-is-locked={props.isLocked}
+          data-anchor-id={data.anchorId}
+          data-node-id={data.nodeId}
+          data-is-locked={data.isLocked}
         >
-          {props.children}
+          {children}
         </span>
       );
     },
@@ -83,7 +239,8 @@ const SemanticStyle = createStyleSpec(
 const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
-    excalidraw: ExcalidrawBlock,
+    excalidraw: ExcalidrawBlock(),
+    page: PageBlock(),
   },
   styleSpecs: {
     ...defaultStyleSpecs,
@@ -199,16 +356,19 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId }: Edit
           // 获取当前选区的所有样式
           const activeStyles = editor.getActiveStyles();
           if (activeStyles.semantic) {
-            const s = activeStyles.semantic as any;
+            let s = { anchorId: "", nodeId: "", provenance: "AI", isLocked: "false" };
+            try {
+              s = JSON.parse(activeStyles.semantic as string);
+            } catch (e) { }
+
             console.log("[Arbitration] Style detected:", s);
 
-            // 同步至图谱中枢
             setActiveNode(s.nodeId);
 
             setExistingAnchor({
               id: s.anchorId,
               nodeId: s.nodeId,
-              title: text || "Selected Concept", // 降级处理
+              title: text || "Selected Concept",
               provenance: s.provenance,
               isLocked: s.isLocked === "true"
             });
@@ -315,7 +475,56 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId }: Edit
         }}
         theme={resolvedTheme === "dark" ? "dark" : "light"}
         formattingToolbar={false}
-      />
+      >
+        <SuggestionMenuController
+          triggerCharacter="/"
+          getItems={async (query) =>
+            filterSuggestionItems(
+              [
+                ...getDefaultReactSlashMenuItems(editor),
+                {
+                  title: "Sub-page",
+                  onItemClick: async () => {
+                    const promise = serverCreateDocument({ title: "Untitled", parentDocumentId: documentId });
+
+                    toast.promise(promise, {
+                      loading: "Creating sub-page...",
+                      success: (doc) => {
+                        // Local insertion for immediate feedback
+                        editor.insertBlocks(
+                          [
+                            {
+                              type: "page",
+                              props: {
+                                pageId: doc.id,
+                                title: doc.title || "Untitled",
+                                backgroundColor: "default",
+                                textColor: "default",
+                                textAlignment: "left"
+                              }
+                            }
+                          ],
+                          editor.getTextCursorPosition().block,
+                          "after"
+                        );
+
+                        router.push(`/documents/${doc.id}`);
+                        return "Sub-page created";
+                      },
+                      error: "Failed to create sub-page"
+                    });
+                  },
+                  aliases: ["page", "subpage", "new"],
+                  group: "Basic Blocks",
+                  icon: <FilePlus className="h-4 w-4" />,
+                  subtext: "Create a nested sub-page",
+                },
+              ],
+              query
+            )
+          }
+        />
+      </BlockNoteView>
       {activeSelection && (
         <SemanticSovereigntyPalette
           editor={editor}
