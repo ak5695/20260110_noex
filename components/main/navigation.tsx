@@ -33,7 +33,6 @@ import {
 import { TrashBox } from "@/components/main/trash-box";
 import { useSearch } from "@/hooks/use-search";
 import { useSettings } from "@/hooks/use-settings";
-import { Navbar } from "@/components/main/navbar";
 
 export const Navigation = () => {
   const router = useRouter();
@@ -45,7 +44,6 @@ export const Navigation = () => {
 
   const isResizingRef = useRef(false);
   const sidebarRef = useRef<ElementRef<"aside">>(null);
-  const navbarRef = useRef<ElementRef<"div">>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(isMobile);
 
@@ -67,10 +65,8 @@ export const Navigation = () => {
     if (newWidth < 240) newWidth = 240;
     if (newWidth > 480) newWidth = 480;
 
-    if (sidebarRef.current && navbarRef.current) {
+    if (sidebarRef.current) {
       sidebarRef.current.style.width = `${newWidth}px`;
-      navbarRef.current.style.setProperty("left", `${newWidth}px`);
-      navbarRef.current.style.setProperty("width", `calc(100% - ${newWidth}px`);
     }
   };
 
@@ -81,29 +77,22 @@ export const Navigation = () => {
   };
 
   const resetWidth = useCallback(() => {
-    if (sidebarRef.current && navbarRef.current) {
+    if (sidebarRef.current) {
       setIsCollapsed(false);
       setIsResetting(true);
 
       sidebarRef.current.style.width = isMobile ? "100%" : "240px";
-      navbarRef.current.style.setProperty("left", isMobile ? "100%" : "240px");
-      navbarRef.current.style.setProperty(
-        "width",
-        isMobile ? "0" : "calc(100% - 240px",
-      );
 
       setTimeout(() => setIsResetting(false), 300);
     }
   }, [isMobile]);
 
   const collapse = () => {
-    if (sidebarRef.current && navbarRef.current) {
+    if (sidebarRef.current) {
       setIsCollapsed(true);
       setIsResetting(true);
 
       sidebarRef.current.style.width = "0";
-      navbarRef.current.style.setProperty("left", "0");
-      navbarRef.current.style.setProperty("width", "100%");
 
       setTimeout(() => setIsResetting(false), 300);
     }
@@ -129,6 +118,32 @@ export const Navigation = () => {
     if (isMobile) collapse();
   }, [pathname, isMobile]);
 
+  useEffect(() => {
+    const handleReset = () => resetWidth();
+    const handleCollapse = () => collapse();
+    const handleToggle = () => isCollapsed ? resetWidth() : collapse();
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("jotion-reset-sidebar", handleReset);
+      window.addEventListener("jotion-collapse-sidebar", handleCollapse);
+      window.addEventListener("jotion-toggle-sidebar", handleToggle);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("jotion-reset-sidebar", handleReset);
+        window.removeEventListener("jotion-collapse-sidebar", handleCollapse);
+        window.removeEventListener("jotion-toggle-sidebar", handleToggle);
+      }
+    };
+  }, [resetWidth, isCollapsed]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("jotion-sidebar-change", { detail: { isCollapsed } }));
+    }
+  }, [isCollapsed]);
+
   return (
     <>
       <aside
@@ -143,7 +158,7 @@ export const Navigation = () => {
           role="botton"
           onClick={collapse}
           className={cn(
-            "h-6 w-6 text-muted-foreground rounded-sm hover:bg-neutral-300 dark:hover:bg-neutral-600 absolute top-3 right-2 opacity-0 group-hover/sidebar:opacity-100 transition",
+            "h-6 w-6 text-muted-foreground rounded-sm hover:bg-neutral-300 dark:hover:bg-neutral-600 absolute top-3 right-2 transition",
             isMobile && "opacity-100",
           )}
         >
@@ -177,28 +192,6 @@ export const Navigation = () => {
           className="opacity-0 group-hover/sidebar:opacity-100 transition cursor-ew-resize absolute h-full w-1 bg-primary/10 right-0 top-0"
         />
       </aside>
-      <div
-        ref={navbarRef}
-        className={cn(
-          "absolute top-0 z-[99999] left-60 w-[calc(100%-240px)]",
-          isResetting && "transition-all ease-in-out duration-300",
-          isMobile && "left-0 w-full",
-        )}
-      >
-        {params.documentId ? (
-          <Navbar isCollapsed={isCollapsed} onResetWidth={resetWidth} />
-        ) : (
-          <nav className="bg-transparent px-3 py-2 w-full">
-            {isCollapsed && (
-              <MenuIcon
-                onClick={resetWidth}
-                role="button"
-                className="h-6 w-6 text-muted-foreground"
-              />
-            )}
-          </nav>
-        )}
-      </div>
     </>
   );
 };

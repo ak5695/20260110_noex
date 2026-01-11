@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getById, update } from "@/actions/documents";
 import { Toolbar } from "@/components/toolbar";
 import { Cover } from "@/components/cover";
+import { Navbar } from "@/components/main/navbar";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
@@ -17,13 +18,18 @@ export default function DocumentIdPage() {
     [],
   );
 
-  const TldrawCanvas = useMemo(
-    () => dynamic(() => import("@/components/tldraw-canvas"), { ssr: false }),
+  const ExcalidrawCanvas = useMemo(
+    () => dynamic(() => import("@/components/excalidraw-canvas"), { ssr: false }),
     [],
   );
 
   const [document, setDocument] = useState<any>(undefined);
   const documentVersionRef = useRef<number>(0);
+  const [isCanvasOpen, setIsCanvasOpen] = useState(true);
+
+  const toggleCanvas = useCallback(() => {
+    setIsCanvasOpen((prev) => !prev);
+  }, []);
 
   useEffect(() => {
     if (typeof documentId === "string") {
@@ -90,32 +96,41 @@ export default function DocumentIdPage() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-full overflow-hidden bg-background dark:bg-[#1F1F1F]">
       {/* 文档编辑区 (文档 = 线性载体) */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="pb-40">
-          <Cover url={document.coverImage} />
-          <div className="md:max-w-3xl lg:max-w-4xl mx-auto">
-            <Toolbar initialData={document} />
-            <Editor
-              onChange={onChange}
-              initialContent={document.content}
-              userId={document.userId}
-              documentId={documentId as string}
-            />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Navbar 固定在编辑器顶部 */}
+        <div className="sticky top-0 z-50 bg-background">
+          <Navbar isCanvasOpen={isCanvasOpen} onToggleCanvas={toggleCanvas} />
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="pb-40">
+            <Cover url={document.coverImage} />
+            <div className="md:max-w-3xl lg:max-w-4xl mx-auto">
+              <Toolbar initialData={document} />
+              <Editor
+                onChange={onChange}
+                initialContent={document.content}
+                userId={document.userId}
+                documentId={documentId as string}
+              />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Canvas 画布区 (可视化 = 图形载体) */}
-      <div className="relative w-[50%] hidden lg:block group/resizer transition-all duration-500 overflow-hidden">
-        {/* 分界线 */}
-        <div className="absolute -left-[0.5px] top-0 bottom-0 w-[1px] bg-border/40 z-50 shadow-[0_0_30px_rgba(0,0,0,0.15)] pointer-events-none" />
+      {isCanvasOpen && (
+        <div className="relative w-[50%] hidden lg:flex group/resizer transition-all duration-500 h-full flex-col">
+          {/* 分界线 */}
+          <div className="absolute -left-[0.5px] top-0 bottom-0 w-[1px] bg-border/40 z-50 shadow-[0_0_30px_rgba(0,0,0,0.15)] pointer-events-none" />
 
-        <div className="h-full border-l border-white/5 bg-background relative z-10">
-          <TldrawCanvas />
+          <div className="flex-1 relative border-l border-white/5 bg-white dark:bg-gray-900 overflow-hidden">
+            <ExcalidrawCanvas />
+          </div>
         </div>
-      </div>
-    </div>
+      )
+      }
+    </div >
   );
 }

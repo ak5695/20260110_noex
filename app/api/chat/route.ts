@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   const { messages } = await req.json();
 
   const result = await streamText({
-    model: google("gemini-1.5-flash"),
+    model: google("gemini-2.0-flash"),
     messages,
     system: `You are a helpful AI writing assistant integrated into a Notion-like document editor.
 
@@ -23,5 +23,5 @@ Keep responses concise, clear, and directly useful for document writing.
 When generating content, format it in a way that's ready to insert into a document.`,
   });
 
-  return result.toDataStreamResponse();
+  return result.toTextStreamResponse();
 }

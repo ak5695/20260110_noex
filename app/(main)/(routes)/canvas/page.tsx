@@ -1,13 +1,17 @@
 "use client";
 
-import { Tldraw } from "tldraw";
-import "tldraw/tldraw.css";
+import dynamic from "next/dynamic";
+
+const Excalidraw = dynamic(
+  () => import("@excalidraw/excalidraw").then((mod) => mod.Excalidraw),
+  { ssr: false }
+);
 
 const CanvasPage = () => {
   return (
     <div className="h-full w-full">
       <div className="fixed inset-0" style={{ height: '100vh' }}>
-        <Tldraw />
+        <Excalidraw />
       </div>
     </div>
   );

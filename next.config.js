@@ -4,6 +4,14 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: "https",
+        hostname: "files.edgestore.dev",
+      },
+      {
+        protocol: "https",
+        hostname: "pub-016cea187e65447bbd8c605758a5dfdd.r2.dev",
+      },
+      {
+        protocol: "https",
         hostname: "**",
       },
     ],

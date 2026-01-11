@@ -81,3 +81,11 @@ body,
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom Fixes */
+
+/* Dark Mode Code Block - Lighter Background */
+.dark .bn-block-outer[data-content-type="codeBlock"] .bn-block-content>div,
+.dark .bn-block-outer[data-content-type="codeBlock"] .cm-editor {
+  background-color: #1E1E1E !important;
+}

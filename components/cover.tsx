@@ -27,8 +27,8 @@ export const Cover = ({ url, preview }: CoverImageProps) => {
   return (
     <div
       className={cn(
-        "relative w-full h-[35vh] group",
-        !url && "h-[12vh]",
+        "relative w-full h-[20vh] group",
+        !url && "h-[6vh]",
         url && "bg-muted",
       )}
     >

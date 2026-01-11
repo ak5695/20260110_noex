@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { BlockNoteEditor, Selection } from "@blocknote/core";
 import { useCreateBlockNote, FormattingToolbarController, GenericPopover, createReactBlockSpec, createReactStyleSpec, SuggestionMenuController, getDefaultReactSlashMenuItems } from "@blocknote/react";
@@ -321,6 +321,10 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId }: Edit
   const { activeNodeId, setActiveNode } = useSemanticSync();
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiModalPosition, setAiModalPosition] = useState({ top: 0, left: 0 });
+  const router = useRouter();
+
+  // Store cursor block ID for restoration after AI modal closes
+  const savedCursorBlockRef = useRef<string | null>(null);
 
   const handleUpload = async (file: File) => {
     const { getUploadUrl } = await import("@/actions/storage");
@@ -347,33 +351,67 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId }: Edit
     if (!editor) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Don't trigger if AI modal is open - handled by modal itself
+      if (showAiModal) return;
+
       if (event.key === " " && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-        const currentBlock = editor.getTextCursorPosition().block;
-        const blockText = currentBlock.content?.map((c: any) => c.text || "").join("") || "";
+        const cursorPosition = editor.getTextCursorPosition();
+        const currentBlock = cursorPosition.block;
+
+        // Get block text content
+        let blockText = "";
+        if (currentBlock.content && Array.isArray(currentBlock.content)) {
+          blockText = currentBlock.content.map((c: any) => c.text || "").join("");
+        }
 
         // Check if current line is empty
         if (blockText.trim() === "") {
           event.preventDefault();
-          setShowAiModal(true);
+          event.stopPropagation();
+
+          // Save current block ID for cursor restoration
+          savedCursorBlockRef.current = currentBlock.id;
+
           // Get cursor position for modal placement
           const selection = window.getSelection();
           if (selection && selection.rangeCount > 0) {
             const range = selection.getRangeAt(0);
             const rect = range.getBoundingClientRect();
             setAiModalPosition({
-              top: rect.top + window.scrollY,
+              top: rect.top + window.scrollY + 20,
               left: rect.left + window.scrollX,
             });
           }
+
+          setShowAiModal(true);
         }
       }
     };
 
     const editorElement = document.querySelector(".bn-container");
     if (editorElement) {
-      editorElement.addEventListener("keydown", handleKeyDown as any);
-      return () => editorElement.removeEventListener("keydown", handleKeyDown as any);
+      editorElement.addEventListener("keydown", handleKeyDown as any, true);
+      return () => editorElement.removeEventListener("keydown", handleKeyDown as any, true);
     }
+  }, [editor, showAiModal]);
+
+  // Restore cursor position when AI modal closes
+  const handleCloseAiModal = useCallback(() => {
+    setShowAiModal(false);
+
+    // Restore focus to editor and cursor position
+    setTimeout(() => {
+      if (editor && savedCursorBlockRef.current) {
+        const block = editor.getBlock(savedCursorBlockRef.current);
+        if (block) {
+          editor.focus();
+          editor.setTextCursorPosition(block, "end");
+        }
+        savedCursorBlockRef.current = null;
+      } else if (editor) {
+        editor.focus();
+      }
+    }, 50);
   }, [editor]);
 
   // 注入上下文到 editor 实例，以便自定义 Block 访问
@@ -575,20 +613,26 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId }: Edit
       )}
       <AiChatModal
         isOpen={showAiModal}
-        onClose={() => setShowAiModal(false)}
+        onClose={handleCloseAiModal}
         position={aiModalPosition}
         onInsertText={(text) => {
           if (editor) {
-            editor.insertBlocks(
-              [
-                {
-                  type: "paragraph",
-                  content: text,
-                },
-              ],
-              editor.getTextCursorPosition().block,
-              "after"
-            );
+            const targetBlock = savedCursorBlockRef.current
+              ? editor.getBlock(savedCursorBlockRef.current)
+              : editor.getTextCursorPosition().block;
+
+            if (targetBlock) {
+              editor.insertBlocks(
+                [
+                  {
+                    type: "paragraph",
+                    content: text,
+                  },
+                ],
+                targetBlock,
+                "after"
+              );
+            }
           }
         }}
       />
