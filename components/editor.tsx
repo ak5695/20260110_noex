@@ -194,6 +194,7 @@ interface EditorProps {
   editable?: boolean;
   userId?: string;
   documentId: string;
+  onDocumentChange?: (document: any) => void; // Expose document for outline
 }
 
 // 1. 定义语义主权自定义样式
@@ -314,7 +315,7 @@ const SemanticSovereigntyPalette = (props: {
   );
 };
 
-const Editor = ({ onChange, initialContent, editable, userId, documentId }: EditorProps) => {
+const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocumentChange }: EditorProps) => {
   const { resolvedTheme } = useTheme();
   const [activeSelection, setActiveSelection] = useState("");
   const [existingAnchor, setExistingAnchor] = useState<any>(null);
@@ -550,6 +551,10 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId }: Edit
         editor={editor}
         onChange={() => {
           onChange(JSON.stringify(editor.document));
+          // Expose document for outline
+          if (onDocumentChange) {
+            onDocumentChange(editor.document);
+          }
         }}
         theme={resolvedTheme === "dark" ? "dark" : "light"}
         formattingToolbar={false}

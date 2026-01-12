@@ -8,16 +8,18 @@ import { Menu } from "@/components/main/menu";
 import { Publish } from "@/components/main/publish";
 import useSWR from "swr";
 
-import { ChevronsLeft, ChevronsRight, MenuIcon } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, MenuIcon, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 interface NavbarProps {
   isCanvasOpen?: boolean;
   onToggleCanvas?: () => void;
+  isOutlineOpen?: boolean;
+  onToggleOutline?: () => void;
 }
 
-export const Navbar = ({ isCanvasOpen, onToggleCanvas }: NavbarProps) => {
+export const Navbar = ({ isCanvasOpen, onToggleCanvas, isOutlineOpen, onToggleOutline }: NavbarProps) => {
   const params = useParams();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -73,6 +75,16 @@ export const Navbar = ({ isCanvasOpen, onToggleCanvas }: NavbarProps) => {
           <div className="flex items-center gap-x-0">
             <Publish initialData={document} />
             <Menu documentId={document.id} />
+            {onToggleOutline && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onToggleOutline}
+                className={isOutlineOpen ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : ""}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            )}
             {onToggleCanvas && (
               <Button size="sm" variant="ghost" onClick={onToggleCanvas}>
                 {isCanvasOpen ? (

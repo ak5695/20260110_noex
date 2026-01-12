@@ -12,6 +12,7 @@ import { useParams } from "next/navigation";
 import { writeQueue } from "@/lib/write-queue";
 import { OptimisticLockError } from "@/lib/errors";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import { DocumentOutline } from "@/components/document-outline";
 
 export default function DocumentIdPage() {
   const { documentId } = useParams();
@@ -29,6 +30,8 @@ export default function DocumentIdPage() {
   const documentVersionRef = useRef<number>(0);
   const [isCanvasOpen, setIsCanvasOpen] = useState(true);
   const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false);
+  const [isOutlineOpen, setIsOutlineOpen] = useState(false);
+  const [editorDocument, setEditorDocument] = useState<any>(null);
 
   const toggleCanvas = useCallback(() => {
     setIsCanvasOpen((prev) => !prev);
@@ -119,9 +122,14 @@ export default function DocumentIdPage() {
       )}>
         {/* Navbar 固定在编辑器顶部 */}
         <div className="sticky top-0 z-50 bg-background">
-          <Navbar isCanvasOpen={isCanvasOpen} onToggleCanvas={toggleCanvas} />
+          <Navbar
+            isCanvasOpen={isCanvasOpen}
+            onToggleCanvas={toggleCanvas}
+            isOutlineOpen={isOutlineOpen}
+            onToggleOutline={() => setIsOutlineOpen((prev) => !prev)}
+          />
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
           <div className="pb-40">
             <Cover url={document.coverImage} />
             <div className="md:max-w-3xl lg:max-w-4xl mx-auto">
@@ -131,9 +139,21 @@ export default function DocumentIdPage() {
                 initialContent={document.content}
                 userId={document.userId}
                 documentId={documentId as string}
+                onDocumentChange={setEditorDocument}
               />
             </div>
           </div>
+
+          {/* Document Outline Sidebar - 固定在编辑区右侧 */}
+          {isOutlineOpen && !isCanvasFullscreen && (
+            <div className="fixed top-20 bottom-4 w-64 bg-background/95 dark:bg-[#1F1F1F]/95 backdrop-blur-sm border border-border/40 rounded-xl shadow-2xl overflow-hidden z-40 hidden xl:block transition-all duration-300"
+              style={{
+                right: isCanvasOpen ? "calc(50% + 1rem)" : "1rem"
+              }}
+            >
+              <DocumentOutline editorDocument={editorDocument} className="h-full overflow-y-auto custom-scrollbar" />
+            </div>
+          )}
         </div>
       </div>
 
