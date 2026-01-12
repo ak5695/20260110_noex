@@ -11,7 +11,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { documentCanvasBindings, canvasElements } from "@/db/canvas-schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, getTableColumns } from "drizzle-orm";
 import type { DropResult } from "@/lib/canvas/drag-drop-types";
 
 interface CreateBindingInput {
@@ -170,8 +170,15 @@ export async function getCanvasBindings(canvasId: string) {
     }
 
     const bindings = await db
-      .select()
+      .select({
+        ...getTableColumns(documentCanvasBindings),
+        isElementDeleted: canvasElements.isDeleted
+      })
       .from(documentCanvasBindings)
+      .leftJoin(canvasElements, and(
+        eq(documentCanvasBindings.elementId, canvasElements.id),
+        eq(documentCanvasBindings.canvasId, canvasElements.canvasId)
+      ))
       .where(eq(documentCanvasBindings.canvasId, canvasId));
 
     return {

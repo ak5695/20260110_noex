@@ -199,11 +199,18 @@ export const AiChatModal = ({
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Smart Toggle: Close on Space if input is empty (acting as a toggle switch)
+    if (e.key === " " && input.length === 0) {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
-  }, [handleSubmit]);
+  }, [handleSubmit, input.length, onClose]);
 
   if (!isOpen) return null;
 
@@ -214,7 +221,7 @@ export const AiChatModal = ({
         className={cn(
           "bg-background/60 backdrop-blur-xl rounded-lg shadow-2xl w-[600px] max-h-[500px] flex flex-col",
           "border border-border",
-          "animate-in fade-in slide-in-from-top-2 duration-200"
+          "animate-modal-enter"
         )}
       >
         {/* Header */}

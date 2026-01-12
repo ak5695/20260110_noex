@@ -8,10 +8,12 @@ import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
 import "@blocknote/core/fonts/inter.css";
 import { SemanticCommandPalette } from "./semantic-command-palette";
+import { SelectionToolbar } from "./selection-toolbar";
 import { toast } from "sonner";
 import { Loader2, Zap, FileIcon, FilePlus } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import debounce from "lodash.debounce";
 import useSWR from "swr";
 import { getById } from "@/actions/documents";
 import {
@@ -242,6 +244,20 @@ const SemanticStyle = createReactStyleSpec(
   }
 );
 
+// Define Canvas Link Style for Inline Binding (Enterprise Grade)
+const CanvasLinkStyle = createReactStyleSpec(
+  {
+    type: "canvasLink",
+    propSchema: "string", // value = elementId
+    content: "styled",
+  },
+  {
+    render: (props) => (
+      <span className="canvas-bound-text" data-canvas-link={props.value} ref={props.contentRef} />
+    ),
+  }
+);
+
 // 2. 注入自定义 Schema
 const schema = BlockNoteSchema.create({
   blockSpecs: {
@@ -252,8 +268,165 @@ const schema = BlockNoteSchema.create({
   styleSpecs: {
     ...defaultStyleSpecs,
     semantic: SemanticStyle,
+    // Enterprise Text-Level Binding
+    canvasLink: CanvasLinkStyle,
   },
 });
+
+/**
+ * Editor Overlay for Binding Indicators (Enterprise Grade)
+ * Independent rendering layer to avoid fighting with BlockNote's DOM management.
+ */
+const EditorBindingOverlay = ({ bindings, editor, jumpToElement, activeBlockId }: { bindings: any[], editor: any, jumpToElement: (id: string) => void, activeBlockId?: string }) => {
+  const [markers, setMarkers] = useState<any[]>([]);
+  const [deletedElementIds, setDeletedElementIds] = useState<Set<string>>(new Set());
+  const [hasLiveInfo, setHasLiveInfo] = useState(false);
+
+  // Listen for canvas ghost updates
+  useEffect(() => {
+    const handleStatusUpdate = (e: CustomEvent) => {
+      const { deletedIds } = e.detail;
+      if (Array.isArray(deletedIds)) {
+        setDeletedElementIds(new Set(deletedIds));
+        setHasLiveInfo(true);
+      }
+    };
+    window.addEventListener("canvas:element-status-update", handleStatusUpdate as EventListener);
+    return () => window.removeEventListener("canvas:element-status-update", handleStatusUpdate as EventListener);
+  }, []);
+
+  // Using ResizeObserver on the editor container to detect layout shifts
+  useEffect(() => {
+    if (!editor || !bindings.length) {
+      setMarkers([]);
+      return;
+    }
+
+    const updateMarkers = () => {
+      // Find the editor container for relative positioning
+      const container = document.querySelector('.group\\/editor');
+      if (!container) return;
+      const containerRect = container.getBoundingClientRect();
+
+      const newMarkers = bindings.map(binding => {
+        // Ghost Check: Intelligent hide based on source of truth
+        // If we have live info from canvas, use local deletedIds.
+        // Otherwise use persisted state (initial load).
+        const isGhost = hasLiveInfo
+          ? deletedElementIds.has(binding.elementId)
+          : binding.isElementDeleted;
+
+        if (isGhost) return null;
+
+        // Find visible block element
+        const el = document.querySelector(`[data-id="${binding.blockId}"]`);
+        if (!el) return null;
+
+        let top = 0;
+        let height = 0;
+        let left = 0;
+        let width = 0; // needed for inline positioning
+        let isInline = false;
+
+        // 1. Try to find inline text binding
+        const textSpan = el.querySelector('.canvas-bound-text');
+        if (textSpan) {
+          const spanRect = textSpan.getBoundingClientRect();
+          top = spanRect.top - containerRect.top;
+          height = spanRect.height;
+          left = spanRect.left - containerRect.left;
+          width = spanRect.width;
+          isInline = true;
+        } else {
+          // 2. Fallback to Block Level
+          const blockRect = el.getBoundingClientRect();
+          top = blockRect.top - containerRect.top;
+          height = blockRect.height;
+          left = 0;
+          width = blockRect.width;
+        }
+
+        return {
+          id: binding.id,
+          blockId: binding.blockId,
+          elementId: binding.elementId,
+          top,
+          height,
+          left,
+          width,
+          isInline
+        };
+      }).filter(Boolean);
+
+      setMarkers(newMarkers);
+    };
+
+    // Update loop
+    let rafId: number;
+    const loop = () => {
+      updateMarkers();
+      rafId = requestAnimationFrame(loop);
+    };
+    loop();
+
+    return () => cancelAnimationFrame(rafId);
+  }, [bindings, editor, deletedElementIds, hasLiveInfo]);
+
+  if (!markers.length) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-10">
+      {markers.map((m: any) => {
+        const isActive = activeBlockId === m.blockId;
+
+        return (
+          <div
+            key={m.id}
+            style={{
+              top: m.top,
+              height: m.height,
+              left: m.isInline ? m.left : 0,
+              right: m.isInline ? 'auto' : 0,
+              width: m.isInline ? m.width : 'auto'
+            }}
+            className={`absolute transition-all duration-75 ${isActive ? 'z-20' : 'z-10'}`}
+          >
+            {/* Spotlight Effect */}
+            {isActive && (
+              <div className={`absolute inset-0 bg-orange-500/10 border-orange-500 animate-pulse shadow-[0_0_30px_rgba(249,115,22,0.15)] ${m.isInline ? 'rounded border-b-2' : 'border-l-4 rounded-r-md'}`} />
+            )}
+
+            {/* Visual Gutter Line (Normal State) - Block Only */}
+            {!isActive && !m.isInline && (
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500 rounded-r shadow-[0_0_8px_rgba(249,115,22,0.4)] opacity-80" />
+            )}
+
+            {/* Interactive Icon */}
+            <div
+              className={`absolute cursor-pointer pointer-events-auto flex items-center justify-center text-orange-500 w-6 h-6 hover:scale-110 hover:bg-orange-50 hover:border-orange-500 transition-all z-50 ${isActive ? 'ring-2 ring-orange-400 scale-110' : ''}`}
+              style={m.isInline ? {
+                left: '0%',
+                top: '50%',
+                marginTop: '-4px',
+                marginLeft: '4px'
+              } : {
+                right: 0,
+                top: -12
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                jumpToElement(m.elementId);
+              }}
+              title="Jump to Canvas"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  );
+};
 
 /**
  * 语义主权面板：纯 UI 组件，由外部控制显示
@@ -325,7 +498,13 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiModalPosition, setAiModalPosition] = useState({ top: 0, left: 0 });
   const [bindings, setBindings] = useState<any[]>([]);
+  const [deletedElementIds, setDeletedElementIds] = useState<Set<string>>(new Set());
+  const [hasLiveInfo, setHasLiveInfo] = useState(false);
   const router = useRouter();
+
+  // Use Zustand navigation store (Hoisted)
+  const blockTarget = useBlockTarget();
+  const { clearBlockTarget, jumpToElement } = useNavigationStore();
 
   // Store cursor block ID for restoration after AI modal closes
   const savedCursorBlockRef = useRef<string | null>(null);
@@ -343,6 +522,16 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
 
     return publicUrl;
   };
+
+  // Real-time content sync to canvas
+  const debouncedSync = useCallback(
+    debounce((blockId: string, text: string) => {
+      window.dispatchEvent(new CustomEvent('document:block-change', {
+        detail: { blockId, text }
+      }));
+    }, 500),
+    []
+  );
 
   const editor = useCreateBlockNote({
     schema,
@@ -398,6 +587,29 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
       return () => editorElement.removeEventListener("keydown", handleKeyDown as any, true);
     }
   }, [editor, showAiModal]);
+
+  // Listen for Drag Check-in (Feedback Loop - Drag to Bind)
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleCanvasBindingSuccess = (e: CustomEvent) => {
+      const { elementId, blockId } = e.detail;
+
+      // Restore focus to editor which often restores selection
+      editor.focus();
+
+      // Check if we are on the correct block (sanity check)
+      // If user selected text, dragged, then dropped, selection SHOULD be preserved.
+      const selection = editor.getSelection();
+      if (selection && selection.blocks.length > 0 && selection.blocks[0].id === blockId) {
+        editor.addStyles({ canvasLink: elementId });
+        toast.success("Text bound to Canvas Node!");
+      }
+    };
+
+    window.addEventListener("document:canvas-binding-success", handleCanvasBindingSuccess as EventListener);
+    return () => window.removeEventListener("document:canvas-binding-success", handleCanvasBindingSuccess as EventListener);
+  }, [editor]);
 
   // Restore cursor position when AI modal closes
   const handleCloseAiModal = useCallback(() => {
@@ -497,9 +709,70 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
     return () => window.removeEventListener("refresh-bindings", handleRefresh);
   }, [documentId]);
 
-  // Use Zustand navigation store
-  const blockTarget = useBlockTarget();
-  const { clearBlockTarget, jumpToElement } = useNavigationStore();
+  // Global Event Delegation for Canvas Links (Performance Optimization)
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('.canvas-bound-text');
+      if (link) {
+        const elementId = link.getAttribute('data-canvas-link');
+        if (elementId) {
+          e.preventDefault();
+          e.stopPropagation();
+          jumpToElement(elementId);
+        }
+      }
+    };
+    // Use capture phase to ensure we intercept before editor internal selection logic
+    window.addEventListener('click', handleClick, true);
+    return () => window.removeEventListener('click', handleClick, true);
+  }, [jumpToElement]);
+
+  // Sync Deleted State from DB Bindings
+  useEffect(() => {
+    const dbDeleted = new Set(bindings.filter(b => b.isElementDeleted).map(b => b.elementId));
+    if (!hasLiveInfo && dbDeleted.size > 0) {
+      setDeletedElementIds(dbDeleted);
+    }
+  }, [bindings, hasLiveInfo]);
+
+  // Listen for Live Canvas ghost updates
+  useEffect(() => {
+    const handleStatusUpdate = (e: CustomEvent) => {
+      const { deletedIds } = e.detail;
+      if (Array.isArray(deletedIds)) {
+        setDeletedElementIds(new Set(deletedIds));
+        setHasLiveInfo(true);
+      }
+    };
+    window.addEventListener("canvas:element-status-update", handleStatusUpdate as EventListener);
+    return () => window.removeEventListener("canvas:element-status-update", handleStatusUpdate as EventListener);
+  }, []);
+
+  // Apply visual ghosting to deleted elements (DOM Manipulation)
+  useEffect(() => {
+    const updateStyles = () => {
+      document.querySelectorAll('.canvas-bound-text').forEach(el => {
+        const id = el.getAttribute('data-canvas-link');
+        if (id && deletedElementIds.has(id)) {
+          el.classList.add('is-deleted');
+        } else {
+          el.classList.remove('is-deleted');
+        }
+      });
+    };
+
+    updateStyles();
+    // Observer for new content appearing
+    const observer = new MutationObserver(updateStyles);
+    const editorElement = document.querySelector('.bn-editor');
+    if (editorElement) {
+      observer.observe(editorElement, { childList: true, subtree: true });
+    }
+    return () => observer.disconnect();
+  }, [deletedElementIds]);
+
+
 
   // 4. Handle Jump-to-Block from Canvas (via Zustand store)
   useEffect(() => {
@@ -556,26 +829,34 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
       if (!id || !activeBlockIds.has(id)) {
         el.classList.remove("is-linked");
         el.querySelector(".link-indicator")?.remove();
+        el.querySelector(".binding-tag")?.remove();
       }
     });
 
     // B: Surgical Injection (Add only what's missing)
     bindings.forEach(binding => {
       if (!binding.blockId) return;
+
+      // Try to find the element - handling BlockNote structure
       const element = document.querySelector(`[data-id="${binding.blockId}"]`);
 
+      // Ensure we are targeting the content wrapper for styling
       if (element) {
-        element.classList.add("is-linked");
+        // Add class for CSS-based border and background
+        if (!element.classList.contains("is-linked")) {
+          element.classList.add("is-linked");
+        }
 
         // Add a small indicator if doesn't exist
         const existingIndicator = element.querySelector(`.link-indicator[data-target="${binding.elementId}"]`);
 
         if (!existingIndicator) {
           const indicator = document.createElement("div");
-          indicator.className = "link-indicator absolute -left-8 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-orange-500/60 hover:text-orange-500 hover:bg-orange-500/10 rounded-full cursor-pointer transition-all z-20 group/indicator";
+          indicator.className = "link-indicator absolute -left-6 top-1.5 w-5 h-5 flex items-center justify-center text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded bg-white dark:bg-[#1f1f1f] shadow-sm border border-orange-200 dark:border-orange-900 cursor-pointer transition-all z-20 group/indicator";
           indicator.setAttribute("data-target", binding.elementId);
-          indicator.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link-2 group-hover/indicator:rotate-12 transition-transform"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
-          indicator.title = "View on Canvas";
+          // Use Link2 icon
+          indicator.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
+          indicator.title = "Jump to Canvas Element";
 
           indicator.onclick = (e) => {
             e.preventDefault();
@@ -584,33 +865,26 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
             jumpToElement(binding.elementId);
           };
 
+          // Ensure relative positioning
           if ((element as HTMLElement).style.position !== "relative") {
             (element as HTMLElement).style.position = "relative";
           }
           element.appendChild(indicator);
         }
 
-        // Add Binding Tag (Cognitive Visibility)
+        // Add Binding Tag (Cognitive Visibility - Top Right)
         if (!element.querySelector(".binding-tag")) {
           const tag = document.createElement("div");
           tag.className = "binding-tag";
+          tag.textContent = "LINKED";
           element.appendChild(tag);
         }
-
-        // Add Status Badge (Arbitration Status Visibility)
-        const status = binding.metadata?.status || "pending";
-        let statusBadge = element.querySelector(".status-badge") as HTMLElement;
-        if (!statusBadge) {
-          statusBadge = document.createElement("span");
-          element.appendChild(statusBadge);
-        }
-        statusBadge.className = `status-badge status-${status}`;
-        statusBadge.innerHTML = status === "pending" ? "⚖️ 待裁决" : status === "confirmed" ? "✅ 已确认" : "❌ 已拒绝";
       }
     });
-  }, [bindings]);
+  }, [bindings, jumpToElement]);
 
   useEffect(() => {
+    return; // Legacy decoration disabled in favor of EditorBindingOverlay
     if (!editor || !bindings.length) return;
 
     // Initial run
@@ -638,7 +912,7 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
       }, 300); // 300ms debounce
     });
 
-    observer.observe(editorElement, {
+    if (editorElement) observer.observe(editorElement as Node, {
       childList: true,
       subtree: true,
       attributes: false,
@@ -750,8 +1024,54 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
     }
   };
 
+  // Handle Concept Creation from Selection Toolbar (Closing the Loop)
+  const handleCreateConcept = async (text: string) => {
+    if (!editor || !userId) return;
+
+    // Get current selection block
+    const selection = editor.getSelection();
+    if (!selection || !selection.blocks.length) return;
+    const block = selection.blocks[0];
+
+    const promise = createManualAnchor({
+      blockId: block.id,
+      documentId: documentId,
+      userId: userId,
+      title: text,
+      type: "concept",
+      startOffset: 0,
+      endOffset: text.length, // Approximate
+      blockText: text, // This might be full block text, but for concept, usage 'text' is fine?
+      blockType: block.type
+    });
+
+    toast.promise(promise, {
+      loading: "Creating concept & binding...",
+      success: (res) => {
+        if (res.success && res.nodeId) {
+          // APPLY STYLE "canvasLink" - Enterprise Gradient Binding
+          editor.addStyles({ canvasLink: res.nodeId });
+          return "Concept created and bound!";
+        } else {
+          throw new Error(res.error || "Failed");
+        }
+      },
+      error: "Failed to create concept"
+    });
+  };
+
+  const handleLinkExisting = (text: string) => {
+    // Prompt for demo purposes
+    const id = window.prompt("Enter Element ID to bind:");
+    if (id) {
+      editor.addStyles({ canvasLink: id });
+      toast.success("Linked to existing element");
+    }
+  };
+
   return (
     <div className="relative group/editor">
+
       <BlockNoteView
         editable={editable}
         editor={editor}
@@ -760,6 +1080,25 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
           // Expose document for outline
           if (onDocumentChange) {
             onDocumentChange(editor.document);
+          }
+
+          // Real-time Content Sync to Canvas (Enterprise Feature)
+          try {
+            const cursor = editor.getTextCursorPosition();
+            if (cursor.block) {
+              const block = cursor.block;
+              const isBound = bindings.some(b => b.blockId === block.id);
+              if (isBound) {
+                // Extract text robustly
+                let text = "";
+                if (Array.isArray(block.content)) {
+                  text = block.content.map(c => (c as any).text || "").join("");
+                }
+                debouncedSync(block.id, text);
+              }
+            }
+          } catch (e) {
+            // Silent catch for cursor issues
           }
         }}
         theme={resolvedTheme === "dark" ? "dark" : "light"}
@@ -814,6 +1153,16 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
           }
         />
       </BlockNoteView>
+
+      <SelectionToolbar
+        documentId={documentId}
+        onCreateConcept={handleCreateConcept}
+        onLinkExisting={handleLinkExisting}
+        onEnsureCanvas={() => {
+          // Optionally open canvas panel
+        }}
+      />
+
       {/* SemanticSovereigntyPalette removed - functionality moved to SelectionToolbar */}
       <AiChatModal
         isOpen={showAiModal}

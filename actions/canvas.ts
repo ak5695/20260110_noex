@@ -229,80 +229,46 @@ export async function saveCanvasElements(
     let insertedCount = 0;
     let updatedCount = 0;
 
-    // Get existing element IDs
-    const elementIds = elements.map(el => el.id);
-    let existingIds = new Set<string>();
-
-    if (elementIds.length > 0) {
-      if (elementIds.length === 1) {
-        const existing = await db
-          .select({ id: canvasElements.id })
-          .from(canvasElements)
-          .where(and(
-            eq(canvasElements.canvasId, canvasId),
-            eq(canvasElements.id, elementIds[0])
-          ));
-        existingIds = new Set(existing.map(e => e.id));
-      } else {
-        const existing = await db
-          .select({ id: canvasElements.id })
-          .from(canvasElements)
-          .where(and(
-            eq(canvasElements.canvasId, canvasId),
-            inArray(canvasElements.id, elementIds)
-          ));
-        existingIds = new Set(existing.map(e => e.id));
-      }
-    }
-
-    const toInsert = elements.filter(el => !existingIds.has(el.id));
-    const toUpdate = elements.filter(el => existingIds.has(el.id));
-
-    if (toInsert.length > 0) {
-      const CHUNK_SIZE = 50;
-      for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
-        const chunk = toInsert.slice(i, i + CHUNK_SIZE);
-        const values = chunk.map((el) => {
-          const originalIndex = elements.findIndex(item => item.id === el.id);
-          return {
-            id: el.id,
-            canvasId,
-            type: el.type,
-            x: el.x,
-            y: el.y,
-            width: el.width,
-            height: el.height,
-            angle: el.angle || 0,
-            data: el,
-            zIndex: originalIndex >= 0 ? originalIndex : 0,
-            version: el.version || 1,
-            isDeleted: el.isDeleted || false,
-          };
-        });
-        await db.insert(canvasElements).values(values);
-        insertedCount += chunk.length;
-      }
-    }
-
-    if (toUpdate.length > 0) {
-      for (const el of toUpdate) {
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < elements.length; i += CHUNK_SIZE) {
+      const chunk = elements.slice(i, i + CHUNK_SIZE);
+      const values = chunk.map((el) => {
         const originalIndex = elements.findIndex(item => item.id === el.id);
-        await db.update(canvasElements)
-          .set({
-            type: el.type,
-            x: el.x,
-            y: el.y,
-            width: el.width,
-            height: el.height,
-            angle: el.angle || 0,
-            data: el,
-            zIndex: originalIndex >= 0 ? originalIndex : 0,
-            version: el.version || 1,
-            isDeleted: el.isDeleted || false,
-          })
-          .where(eq(canvasElements.id, el.id));
-        updatedCount++;
-      }
+        return {
+          id: el.id,
+          canvasId,
+          type: el.type,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          angle: el.angle || 0,
+          data: el,
+          zIndex: originalIndex >= 0 ? originalIndex : 0,
+          version: el.version || 1,
+          isDeleted: el.isDeleted || false,
+          updatedAt: new Date()
+        };
+      });
+
+      await db.insert(canvasElements).values(values).onConflictDoUpdate({
+        target: canvasElements.id,
+        set: {
+          type: sql`excluded.type`,
+          x: sql`excluded.x`,
+          y: sql`excluded.y`,
+          width: sql`excluded.width`,
+          height: sql`excluded.height`,
+          angle: sql`excluded.angle`,
+          data: sql`excluded.data`,
+          zIndex: sql`excluded.z_index`,
+          version: sql`excluded.version`,
+          isDeleted: sql`excluded.is_deleted`,
+          updatedAt: sql`excluded.updated_at`
+        }
+      });
+
+      updatedCount += chunk.length; // Simplification: assume all processed
     }
 
     // Update canvas metadata

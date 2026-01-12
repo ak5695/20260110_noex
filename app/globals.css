@@ -89,129 +89,235 @@ body,
 .dark .bn-block-outer[data-content-type="codeBlock"] .cm-editor {
   background-color: #1E1E1E !important;
 }
-/* Canvas Binding Styles */
-.is-linked {
+
+/* --- 图文联动：企业级可视系统 (Enterprise Visual System) --- */
+
+@keyframes spotlight-pulse {
+  0% {
+    background-color: rgba(249, 115, 22, 0.1);
+    border-left-color: rgba(249, 115, 22, 0.4);
+  }
+
+  50% {
+    background-color: rgba(249, 115, 22, 0.25);
+    border-left-color: rgba(249, 115, 22, 1);
+  }
+
+  100% {
+    background-color: rgba(249, 115, 22, 0.1);
+    border-left-color: rgba(249, 115, 22, 0.4);
+  }
+}
+
+/* 1. 已绑定 Block 的常态样式 */
+.bn-block-outer.is-linked {
   position: relative !important;
-  border-left: 2px solid transparent;
-  transition: all 0.3s ease;
+  border-left: 3px solid rgba(249, 115, 22, 0.3) !important;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  overflow: visible !important;
+  /* 关键：允许图标溢出 */
 }
 
-.is-linked:hover {
-  border-left-color: rgba(249, 115, 22, 0.4);
-  background-color: rgba(249, 115, 22, 0.03);
+/* 确保内容背景透明，以便父级背景可见 (针对 BlockNote 内部结构) */
+.bn-block-outer.is-linked .bn-block-content {
+  background-color: transparent !important;
 }
 
-.dark .is-linked:hover {
-  background-color: rgba(249, 115, 22, 0.05);
+.bn-block-outer.is-linked:hover {
+  background-color: rgba(249, 115, 22, 0.05) !important;
+  border-left-color: #f97316 !important;
 }
 
-.link-indicator {
+.dark .bn-block-outer.is-linked:hover {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+}
+
+/* 2. 激活态 (Focus/Jump) - 聚光灯效果 */
+.bn-block-outer.is-active-link {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+  border-left: 5px solid #f97316 !important;
+  animation: spotlight-pulse 2s infinite ease-in-out;
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.15);
   z-index: 10;
-  pointer-events: auto;
 }
 
-.link-indicator:hover {
-  transform: translateY(-50%) scale(1.2);
-  color: #f97316;
+/* 确保激活时背景也能穿透 */
+.bn-block-outer.is-active-link .bn-block-content {
+  background-color: transparent !important;
 }
 
-/* --- 图文联动：认知可用性改造 (Cognitive State Visibility) --- */
-
-/* 1. 文档侧：持续态高亮与标识 */
-.is-active-link {
-  background-color: rgba(249, 115, 22, 0.08) !important;
-  border-left: 4px solid #f97316 !important;
-  border-radius: 0 4px 4px 0;
-  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-  box-shadow: -4px 0 12px rgba(249, 115, 22, 0.1);
-}
-
-.dark .is-active-link {
-  background-color: rgba(249, 115, 22, 0.12) !important;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2);
-}
-
-/* 2. 绑定提示标签 (Persistent Tag) */
-.binding-tag {
-  position: absolute;
-  right: 0;
-  top: -20px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 2px 8px;
-  background: #f97316;
-  color: white;
-  border-radius: 4px 4px 0 0;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: all 0.3s ease;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.is-active-link .binding-tag {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* 3. 文档块：常驻逻辑标识 (🔗) */
+/* 3. 链接指示器 (小图标) */
 .link-indicator {
-  transition: all 0.2s ease-out;
-  border: 1px solid transparent;
+  position: absolute;
+  left: -28px !important;
+  /* 再往左一点，避开拖拽手柄 */
+  top: 4px !important;
+  z-index: 50;
+  pointer-events: auto;
+  opacity: 0.8;
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  background-color: var(--background);
+  width: 20px;
+  height: 20px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transform: scale(0.9);
+  transition: all 0.2s;
 }
 
 .link-indicator:hover {
-  background: white;
+  background: #fff7ed;
   border-color: #f97316;
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.2);
-  transform: translateY(-50%) scale(1.1);
   color: #f97316;
+  transform: scale(1.1);
+  opacity: 1;
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.25);
+}
+
+.dark .link-indicator {
+  background-color: #1f1f1f;
+  border-color: rgba(249, 115, 22, 0.3);
 }
 
 .dark .link-indicator:hover {
   background: #2D2D35;
 }
 
-/* 4. 裁决状态标识 (Status Indicators) */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 8px;
-  font-size: 10px;
-  padding: 1px 4px;
-  border-radius: 4px;
-  vertical-align: middle;
-}
-.status-pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }
-.status-approved { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
-.status-rejected { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
-
-/* 5. 画布覆盖层样式 (Canvas Overlays) */
-.canvas-element-badge {
+/* 4. Canvas Element Badge (HUD) */
+.canvas-binding-badge {
   position: absolute;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  background: #f97316;
   padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-blur: 4px;
-  border: 1px solid #f97316;
-  color: #f97316;
-  font-size: 9px;
-  font-weight: 800;
   border-radius: 4px;
   pointer-events: none;
-  z-index: 100;
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.2);
+  z-index: 50;
+  transform: translate(-50%, -100%);
+  margin-top: -8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
-  gap: 3px;
-  transform: translate(-50%, -100%);
+  gap: 4px;
+  opacity: 0.9;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
 
-.dark .canvas-element-badge {
-  background: rgba(30, 30, 40, 0.9);
-  border-color: #f97316;
+.canvas-binding-badge svg {
+  width: 10px;
+  height: 10px;
 }
 
+.canvas-binding-badge.active {
+  background: #ea580c;
+  transform: translate(-50%, -100%) scale(1.1);
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.4);
+  z-index: 51;
+}
+
+/* 5. 绑定元数据标签 */
+.binding-tag {
+  position: absolute;
+  right: 4px;
+  top: -16px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  background: #f97316;
+  color: white;
+  border-radius: 3px;
+  opacity: 0.8;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.bn-block-outer.is-active-link .binding-tag,
+.bn-block-outer.is-linked:hover .binding-tag {
+  opacity: 1;
+}
+
+/* --- 文字级绑定样式 (Text-Level Binding) --- */
+.canvas-bound-text {
+  border-bottom: 2px solid #f97316;
+  background-color: rgba(249, 115, 22, 0.15);
+  color: #c2410c;
+  /* text-orange-700 */
+  cursor: crosshair !important;
+  transition: all 0.2s ease;
+  border-radius: 2px;
+  text-decoration: none !important;
+}
+
+.dark .canvas-bound-text {
+  background-color: rgba(249, 115, 22, 0.2);
+  color: #fdba74;
+  /* text-orange-300 */
+}
+
+.canvas-bound-text:hover {
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.2);
+}
+
+.canvas-bound-text.is-deleted {
+  background-color: transparent !important;
+  border-bottom-color: transparent !important;
+  /* Hide underline */
+  color: inherit !important;
+  cursor: default !important;
+  pointer-events: none;
+  /* Disable interaction */
+  opacity: 0.7;
+}
+
+/* --- Spring Animations for UX Improvement --- */
+
+@keyframes spring-enter {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.9) translateY(10px);
+  }
+
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.05) translateY(-5px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1) translateY(0);
+  }
+}
+
+.animate-spring-enter {
+  animation: spring-enter 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes spring-modal-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.02) translateY(-2px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-enter {
+  animation: spring-modal-enter 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import "@excalidraw/excalidraw/index.css";
 import { useTheme } from "next-themes";
-import { Maximize, Minimize, AlertCircle, Loader2, PlusCircle } from "lucide-react";
+import { Maximize, Minimize, AlertCircle, Loader2, PlusCircle, Cloud, Check } from "lucide-react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { DRAG_MIME_TYPE } from "@/lib/canvas/drag-drop-types";
 import { dragDropBridge } from "@/lib/canvas/drag-drop-bridge";
@@ -65,6 +65,83 @@ const ToolbarPortal = ({ isFullscreen, onToggle }: { isFullscreen?: boolean; onT
     );
 };
 
+interface Binding {
+    id: string;
+    elementId: string;
+    blockId: string;
+    // ... other fields
+}
+
+/**
+ * Canvas Overlay Layer for displaying Binding Badges
+ * Uses requestAnimationFrame for independent 60fps rendering without blocking Excalidraw
+ */
+const CanvasBindingLayer = ({ excalidrawAPI, bindings }: { excalidrawAPI: any, bindings: any[] }) => {
+    const [overlayItems, setOverlayItems] = useState<{ id: string, x: number, y: number, label: string }[]>([]);
+    const rafRef = useRef<number | null>(null);
+
+    const updateOverlays = useCallback(() => {
+        if (!excalidrawAPI || bindings.length === 0) return;
+
+        const appState = excalidrawAPI.getAppState();
+        const elements = excalidrawAPI.getSceneElements();
+        const { scrollX, scrollY, zoom } = appState;
+
+        // Filter elements that are currently within the viewport (optimization)
+        // For simplicity, we calculate for all bound elements, but CSS handles clipping via overflow:hidden on container
+
+        const items = bindings.map(binding => {
+            const element = elements.find((el: any) => el.id === binding.elementId);
+            if (!element || element.isDeleted) return null;
+
+            // Calculate screen position
+            // ScreenX = (CanvasX + ScrollX) * Zoom
+            const screenX = (element.x + scrollX) * zoom.value;
+            const screenY = (element.y + scrollY) * zoom.value;
+
+            // Center horizontally
+            const centerX = screenX + (element.width * zoom.value) / 2;
+
+            return {
+                id: binding.id,
+                x: centerX,
+                y: screenY,
+                label: "LINKED"
+            };
+        }).filter(Boolean) as { id: string, x: number, y: number, label: string }[];
+
+        setOverlayItems(items);
+        rafRef.current = requestAnimationFrame(updateOverlays);
+    }, [excalidrawAPI, bindings]);
+
+    useEffect(() => {
+        rafRef.current = requestAnimationFrame(updateOverlays);
+        return () => {
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        };
+    }, [updateOverlays]);
+
+    if (overlayItems.length === 0) return null;
+
+    return (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+            {overlayItems.map(item => (
+                <div
+                    key={item.id}
+                    className="canvas-binding-badge"
+                    style={{
+                        left: item.x,
+                        top: item.y,
+                    }}
+                >
+                    <Link2 className="h-3 w-3" />
+                    {item.label}
+                </div>
+            ))}
+        </div>
+    );
+};
+
 export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen, onToggleFullscreen }: ExcalidrawCanvasProps) => {
     const { resolvedTheme } = useTheme();
     const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
@@ -75,6 +152,7 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
     const [initialElements, setInitialElements] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [bindings, setBindings] = useState<any[]>([]);
+    const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving">("idle");
 
     // Track state versions to avoid redundant saves
     const lastElementsRef = useRef<string>("");
@@ -137,7 +215,37 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
 
     // Use Zustand navigation store for cross-component navigation
     const elementTarget = useElementTarget();
-    const { clearElementTarget, jumpToBlock } = useNavigationStore();
+
+    // 1. Navigation Helper (Jump to Block)
+    const { jumpToElement } = useNavigationStore();
+    const jumpToBlock = (blockId: string, text: string) => {
+        // ... (existing)
+        const element = document.querySelector(`[data-id="${blockId}"]`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Flash effect
+            element.classList.add('bg-orange-100');
+            setTimeout(() => element.classList.remove('bg-orange-100'), 2000);
+
+            // Set element target for Highlight
+            useNavigationStore.getState().jumpToBlock(blockId, text);
+        } else {
+            console.warn("[Canvas] Block not found in DOM:", blockId);
+            toast.error("Block not found in current view");
+        }
+    };
+
+    const clearElementTarget = useCallback(() => {
+        const { elementTarget } = useNavigationStore.getState();
+        if (elementTarget) {
+            useNavigationStore.getState().clearElementTarget();
+
+            // Also update excalidraw selection if needed
+            if (excalidrawAPI) {
+                // Optionally clear selection
+            }
+        }
+    }, [excalidrawAPI]);
 
     // 1.8 Handle Jump-to-Element from Document (via Zustand store)
     useEffect(() => {
@@ -164,13 +272,18 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
     // 2. Debounced Persistence
     const debouncedSave = useCallback(
         debounce(async (cid: string, elements: readonly any[]) => {
+            setSaveStatus("saving");
             const elementsToSave = elements.filter(el => !el.isDeleted);
             const currentSig = JSON.stringify(elementsToSave);
 
-            if (currentSig === lastElementsRef.current) return;
+            if (currentSig === lastElementsRef.current) {
+                setSaveStatus("idle");
+                return;
+            }
 
             lastElementsRef.current = currentSig;
             try {
+                // Save ALL elements (including deleted) to ensure state consistency
                 const res = await saveCanvasElements(cid, [...elements]);
                 if (!res.success) {
                     console.error("[Canvas] Failed to save elements:", res.error);
@@ -179,8 +292,10 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
             } catch (err) {
                 console.error("[Canvas] Failed to save elements - exception:", err);
                 toast.error("Failed to auto-save canvas");
+            } finally {
+                setSaveStatus("idle");
             }
-        }, 1500),
+        }, 800, { maxWait: 4000 }), // Enterprise tuning: 800ms debounce, 4s max wait
         []
     );
 
@@ -195,6 +310,26 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
         []
     );
 
+    // Cleanup flush on unmount to prevent data loss
+    useEffect(() => {
+        return () => {
+            debouncedSave.flush();
+            debouncedViewportSave.flush();
+        };
+    }, [debouncedSave, debouncedViewportSave]);
+
+
+    // 2.5 Broadcast Status (Debounced)
+    const broadcastElementStatus = useCallback(
+        debounce((elements: readonly any[]) => {
+            const deletedIds = elements.filter(el => el.isDeleted).map(el => el.id);
+            window.dispatchEvent(new CustomEvent("canvas:element-status-update", {
+                detail: { deletedIds } // Explicitly sending deleted IDs
+            }));
+        }, 300),
+        []
+    );
+
     // Excalidraw onChange fires on EVERY event
     const handleCanvasChange = (elements: readonly any[], appState: any) => {
         if (!isLoaded || !canvasId) return;
@@ -203,6 +338,8 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
         if (onChange) {
             onChange([...elements], appState);
         }
+
+        broadcastElementStatus(elements);
 
         // Viewport tracking removed for performance (native Excalidraw links used instead)
 
@@ -250,6 +387,52 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
             zoom: appState.zoom.value
         });
     };
+
+    // 3. Real-time Content Sync Listener (Document -> Canvas)
+    useEffect(() => {
+        if (!excalidrawAPI) return;
+
+        const handleBlockChange = (e: any) => {
+            const { blockId, text } = e.detail;
+            if (!blockId) return;
+
+            const link = `jotion://block/${blockId}`;
+            const elements = excalidrawAPI.getSceneElements();
+
+            // Strategy: Find TEXT elements with this link and update them
+            // We assume text elements created by drag-drop have the link property.
+
+            let needsUpdate = false;
+            const updatedElements = elements.map((el: any) => {
+                if (el.type === "text" && el.link === link) {
+                    // Only update if text content is different
+                    // Note: This simplistic update might not resize the text container ideally
+                    // but Excalidraw usually handles text reflow on next render.
+                    if (el.text !== text) {
+                        needsUpdate = true;
+                        return {
+                            ...el,
+                            text: text,
+                            originalText: text,
+                            version: el.version + 1,
+                            versionNonce: Math.floor(Math.random() * 100000)
+                        };
+                    }
+                }
+                return el;
+            });
+
+            if (needsUpdate) {
+                excalidrawAPI.updateScene({
+                    elements: updatedElements
+                });
+                console.log(`[Canvas] Synced text for block ${blockId}`);
+            }
+        };
+
+        window.addEventListener("document:block-change", handleBlockChange);
+        return () => window.removeEventListener("document:block-change", handleBlockChange);
+    }, [excalidrawAPI]);
 
     // --- Cognitive Visibility: Native Links (No Overlay) ---
     // We rely on Excalidraw's native link rendering for maximum performance.
@@ -426,6 +609,16 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
                 if (result.success && result.binding) {
                     setBindings(prev => [...prev, result.binding]);
                     window.dispatchEvent(new CustomEvent("refresh-bindings"));
+
+                    // Notify Editor to Apply Text Style (Closing the Loop)
+                    window.dispatchEvent(new CustomEvent("document:canvas-binding-success", {
+                        detail: {
+                            elementId: rectId,
+                            blockId: payload.blockId,
+                            metadata: payload.metadata
+                        }
+                    }));
+
                     toast.success("Linked to document");
                 }
             });
@@ -491,6 +684,32 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
                     }
                 }}
             />
+
+            {/* 4. Canvas Binding Overlay Layer (HUD) */}
+            <CanvasBindingLayer excalidrawAPI={excalidrawAPI} bindings={bindings} />
+
+            {/* Status Indicator (Enterprise Grade) */}
+            <div className="absolute top-36 left-4 z-50 pointer-events-none flex items-center gap-2 px-3 py-1.5 bg-white/90 dark:bg-[#1e1e1e]/90 backdrop-blur rounded-full shadow-sm text-xs font-medium border border-gray-200 dark:border-gray-700 transition-all duration-300 origin-left">
+                {saveStatus === "saving" && (
+                    <>
+                        <Loader2 className="w-3 h-3 animate-spin text-orange-500" />
+                        <span className="text-orange-600 dark:text-orange-400">Saving...</span>
+                    </>
+                )}
+                {saveStatus === "idle" && (
+                    <>
+                        <Cloud className="w-3 h-3 text-gray-400" />
+                        <Check className="w-2.5 h-2.5 text-green-500 -ml-1" />
+                        <span className="text-gray-500 dark:text-gray-400">Saved</span>
+                    </>
+                )}
+                {saveStatus === "pending" && (
+                    <>
+                        <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                        <span className="text-gray-500 dark:text-gray-400">Changed</span>
+                    </>
+                )}
+            </div>
 
             {onToggleFullscreen && (
                 <ToolbarPortal isFullscreen={isFullscreen} onToggle={onToggleFullscreen} />

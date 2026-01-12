@@ -123,6 +123,8 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             metadata: {
                 selectionLength: selectedText.length,
                 draggedFromToolbar: true,
+                startOffset: window.getSelection()?.getRangeAt(0).startOffset,
+                endOffset: window.getSelection()?.getRangeAt(0).endOffset
             },
         });
 
@@ -171,11 +173,10 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
             {visible && (
                 <div
                     ref={toolbarRef}
-                    className="fixed z-[9999] pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-200"
+                    className="fixed z-[9999] pointer-events-auto animate-spring-enter"
                     style={{
                         left: `${position.x}px`,
                         top: `${position.y}px`,
-                        transform: "translateX(-50%)",
                     }}
                 >
                     <div
