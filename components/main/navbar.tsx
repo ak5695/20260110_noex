@@ -70,7 +70,7 @@ export const Navbar = ({ isCanvasOpen, onToggleCanvas }: NavbarProps) => {
         )}
         <div className="flex items-center justify-between w-full">
           <Title initialData={document} />
-          <div className="flex items-center gap-x-2">
+          <div className="flex items-center gap-x-0">
             <Publish initialData={document} />
             <Menu documentId={document.id} />
             {onToggleCanvas && (

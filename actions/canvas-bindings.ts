@@ -1,0 +1,262 @@
+/**
+ * Canvas Binding Server Actions
+ *
+ * Handles creation and management of document-canvas bindings
+ * Integrates with the enterprise canvas storage system
+ */
+
+"use server";
+
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+import { db } from "@/db";
+import { documentCanvasBindings, canvasElements } from "@/db/canvas-schema";
+import { eq, and } from "drizzle-orm";
+import type { DropResult } from "@/lib/canvas/drag-drop-types";
+
+interface CreateBindingInput {
+  canvasId: string;
+  documentId: string;
+  elementId: string;
+  blockId?: string;
+  semanticNodeId?: string;
+  bindingType: string;
+  sourceType: string;
+  anchorText: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Create a document-canvas binding from a drag-drop operation
+ */
+export async function createCanvasBinding(input: CreateBindingInput) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const userId = session.user.id;
+
+    // Create the binding record
+    const [binding] = await db
+      .insert(documentCanvasBindings)
+      .values({
+        documentId: input.documentId,
+        blockId: input.blockId,
+        semanticNodeId: input.semanticNodeId,
+        canvasId: input.canvasId,
+        elementId: input.elementId,
+        bindingType: input.bindingType,
+        direction: "doc_to_canvas",
+        anchorText: input.anchorText,
+        status: "approved", // User-created bindings are auto-approved
+        provenance: "drag_drop",
+        metadata: input.metadata,
+      })
+      .returning();
+
+    console.log("[createCanvasBinding] Binding created:", binding.id);
+
+    return {
+      success: true,
+      binding,
+    };
+  } catch (error) {
+    console.error("[createCanvasBinding] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to create binding",
+    };
+  }
+}
+
+/**
+ * Save canvas elements to database
+ * Used when elements are created via drag-drop
+ */
+export async function saveCanvasElements(
+  canvasId: string,
+  elements: Array<{
+    id: string;
+    type: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    angle?: number;
+    data: any;
+    boundBlockId?: string;
+    boundSemanticNodeId?: string;
+  }>
+) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // Insert or update elements
+    const savedElements = await Promise.all(
+      elements.map(async (element) => {
+        const [saved] = await db
+          .insert(canvasElements)
+          .values({
+            id: element.id,
+            canvasId,
+            type: element.type,
+            x: element.x,
+            y: element.y,
+            width: element.width,
+            height: element.height,
+            angle: element.angle || 0,
+            data: element.data,
+            boundBlockId: element.boundBlockId,
+            boundSemanticNodeId: element.boundSemanticNodeId,
+            bindingProvenanceType: "user",
+            bindingStatus: "approved",
+          })
+          .onConflictDoUpdate({
+            target: canvasElements.id,
+            set: {
+              type: element.type,
+              x: element.x,
+              y: element.y,
+              width: element.width,
+              height: element.height,
+              angle: element.angle || 0,
+              data: element.data,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+
+        return saved;
+      })
+    );
+
+    console.log("[saveCanvasElements] Elements saved:", savedElements.length);
+
+    return {
+      success: true,
+      elements: savedElements,
+    };
+  } catch (error) {
+    console.error("[saveCanvasElements] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to save elements",
+    };
+  }
+}
+
+/**
+ * Get bindings for a canvas
+ */
+export async function getCanvasBindings(canvasId: string) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const bindings = await db
+      .select()
+      .from(documentCanvasBindings)
+      .where(eq(documentCanvasBindings.canvasId, canvasId));
+
+    return {
+      success: true,
+      bindings,
+    };
+  } catch (error) {
+    console.error("[getCanvasBindings] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to get bindings",
+    };
+  }
+}
+
+/**
+ * Delete a binding
+ */
+export async function deleteCanvasBinding(bindingId: string) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    await db
+      .delete(documentCanvasBindings)
+      .where(eq(documentCanvasBindings.id, bindingId));
+
+    console.log("[deleteCanvasBinding] Binding deleted:", bindingId);
+
+    return { success: true };
+  } catch (error) {
+    console.error("[deleteCanvasBinding] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete binding",
+    };
+  }
+}
+
+/**
+ * Update binding status (for human arbitration)
+ */
+export async function updateBindingStatus(
+  bindingId: string,
+  status: "pending" | "approved" | "rejected" | "modified",
+  reviewNotes?: string
+) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const userId = session.user.id;
+
+    const [updated] = await db
+      .update(documentCanvasBindings)
+      .set({
+        status,
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+        reviewNotes,
+      })
+      .where(eq(documentCanvasBindings.id, bindingId))
+      .returning();
+
+    console.log("[updateBindingStatus] Binding updated:", bindingId, status);
+
+    return {
+      success: true,
+      binding: updated,
+    };
+  } catch (error) {
+    console.error("[updateBindingStatus] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update binding status",
+    };
+  }
+}

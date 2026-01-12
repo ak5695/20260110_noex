@@ -32,7 +32,7 @@ const ToolbarPortal = ({ isFullscreen, onToggle }: { isFullscreen?: boolean; onT
 
     return (
         <button
-            className="flex items-center justify-center rounded-lg transition-colors pointer-events-auto shadow-sm hover:opacity-80"
+            className="flex items-center justify-center rounded-lg transition-colors pointer-events-auto bg-white dark:bg-[#232329] text-gray-900 dark:text-[#ced4da] shadow-md hover:opacity-80"
             style={{
                 position: "absolute",
                 top: "4.5rem",
@@ -40,8 +40,6 @@ const ToolbarPortal = ({ isFullscreen, onToggle }: { isFullscreen?: boolean; onT
                 width: "2.25rem",
                 height: "2.25rem",
                 zIndex: 50,
-                backgroundColor: "var(--island-bg-color, #232329)",
-                color: "var(--icon-fill-color, #ced4da)"
             }}
             onClick={onToggle}
             title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
