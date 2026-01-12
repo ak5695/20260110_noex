@@ -709,6 +709,70 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
     return () => window.removeEventListener("refresh-bindings", handleRefresh);
   }, [documentId]);
 
+  // 【企业级】监听Canvas元素删除事件，彻底移除绑定标记
+  useEffect(() => {
+    const handleElementDeleted = (e: CustomEvent) => {
+      const { elementIds, deletedBindings } = e.detail;
+      console.log('[Editor] Elements deleted from Canvas, removing bindings:', elementIds);
+
+      if (!elementIds || !Array.isArray(elementIds)) return;
+
+      // 1. 从bindings state中移除已删除的绑定
+      setBindings(prev => prev.filter(b => !elementIds.includes(b.elementId)));
+
+      // 2. 彻底移除所有UI标记
+      elementIds.forEach((elementId: string) => {
+        // Remove overlay markers
+        const overlayMarkers = document.querySelectorAll(`[data-element-id="${elementId}"]`);
+        overlayMarkers.forEach(marker => {
+          console.log('[Editor] Removing overlay marker for', elementId);
+          marker.remove();
+        });
+
+        // Remove link indicators
+        const linkIndicators = document.querySelectorAll(`.link-indicator[data-target="${elementId}"]`);
+        linkIndicators.forEach(indicator => {
+          console.log('[Editor] Removing link indicator for', elementId);
+          indicator.remove();
+        });
+
+        // Remove canvasLink style via BlockNote API
+        const boundTexts = document.querySelectorAll(`.canvas-bound-text[data-canvas-link="${elementId}"]`);
+        if (boundTexts.length > 0 && editor) {
+          try {
+            const blocks = editor.document;
+            blocks.forEach((block: any) => {
+              if (block.content && Array.isArray(block.content)) {
+                const hasBinding = block.content.some((content: any) =>
+                  content.styles?.canvasLink === elementId
+                );
+
+                if (hasBinding) {
+                  const newContent = block.content.map((c: any) => {
+                    if (c.styles?.canvasLink === elementId) {
+                      const { canvasLink, ...restStyles } = c.styles;
+                      return { ...c, styles: restStyles };
+                    }
+                    return c;
+                  });
+                  editor.updateBlock(block.id, { content: newContent });
+                  console.log('[Editor] Removed canvasLink style from block', block.id);
+                }
+              }
+            });
+          } catch (err) {
+            console.error('[Editor] Error removing canvasLink style:', err);
+          }
+        }
+      });
+
+      console.log('[Editor] Binding cleanup complete for', elementIds.length, 'elements');
+    };
+
+    window.addEventListener('binding:element-deleted', handleElementDeleted as EventListener);
+    return () => window.removeEventListener('binding:element-deleted', handleElementDeleted as EventListener);
+  }, [editor]);
+
   // Global Event Delegation for Canvas Links (Performance Optimization)
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
