@@ -267,3 +267,117 @@ export async function updateBindingStatus(
     };
   }
 }
+
+/**
+ * 清理孤立绑定（元素已被删除但绑定记录仍存在）
+ * 企业级解决方案：彻底清理幽灵绑定
+ */
+export async function cleanupOrphanedBindings(canvasId: string) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    // 查找所有绑定到已删除元素的绑定记录
+    const orphanedBindings = await db
+      .select({
+        bindingId: documentCanvasBindings.id,
+        elementId: documentCanvasBindings.elementId
+      })
+      .from(documentCanvasBindings)
+      .leftJoin(canvasElements, and(
+        eq(documentCanvasBindings.elementId, canvasElements.id),
+        eq(documentCanvasBindings.canvasId, canvasElements.canvasId)
+      ))
+      .where(
+        and(
+          eq(documentCanvasBindings.canvasId, canvasId),
+          eq(canvasElements.isDeleted, true)
+        )
+      );
+
+    if (orphanedBindings.length === 0) {
+      return { success: true, deletedCount: 0 };
+    }
+
+    // 批量删除孤立绑定
+    const bindingIds = orphanedBindings.map(b => b.bindingId);
+
+    for (const bindingId of bindingIds) {
+      await db
+        .delete(documentCanvasBindings)
+        .where(eq(documentCanvasBindings.id, bindingId));
+    }
+
+    console.log("[cleanupOrphanedBindings] Cleaned up", bindingIds.length, "orphaned bindings");
+
+    return {
+      success: true,
+      deletedCount: bindingIds.length,
+      deletedBindingIds: bindingIds
+    };
+  } catch (error) {
+    console.error("[cleanupOrphanedBindings] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to cleanup orphaned bindings",
+    };
+  }
+}
+
+/**
+ * 删除绑定（通过elementId）
+ * 当用户在画布上删除元素时调用
+ */
+export async function deleteBindingsByElementIds(canvasId: string, elementIds: string[]) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const deletedBindings: any[] = [];
+
+    // 删除所有关联的绑定
+    for (const elementId of elementIds) {
+      const bindings = await db
+        .select()
+        .from(documentCanvasBindings)
+        .where(
+          and(
+            eq(documentCanvasBindings.canvasId, canvasId),
+            eq(documentCanvasBindings.elementId, elementId)
+          )
+        );
+
+      for (const binding of bindings) {
+        await db
+          .delete(documentCanvasBindings)
+          .where(eq(documentCanvasBindings.id, binding.id));
+
+        deletedBindings.push(binding);
+      }
+    }
+
+    console.log("[deleteBindingsByElementIds] Deleted", deletedBindings.length, "bindings");
+
+    return {
+      success: true,
+      deletedCount: deletedBindings.length,
+      deletedBindings
+    };
+  } catch (error) {
+    console.error("[deleteBindingsByElementIds] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete bindings",
+    };
+  }
+}

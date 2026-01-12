@@ -319,14 +319,49 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
     }, [debouncedSave, debouncedViewportSave]);
 
 
-    // 2.5 Broadcast Status (Debounced)
-    const broadcastElementStatus = useCallback(
-        debounce((elements: readonly any[]) => {
-            const deletedIds = elements.filter(el => el.isDeleted).map(el => el.id);
-            window.dispatchEvent(new CustomEvent("canvas:element-status-update", {
-                detail: { deletedIds } // Explicitly sending deleted IDs
-            }));
-        }, 300),
+    // 企业级绑定删除检测（替换broadcastElementStatus）
+    const prevActiveElementsRef = useRef<Set<string>>(new Set());
+
+    const detectAndCleanupDeletedBindings = useCallback(
+        debounce(async (canvasId: string, currentElements: readonly any[]) => {
+            // 构建当前活跃元素ID集合（排除已删除）
+            const currentActiveIds = new Set(
+                currentElements.filter(el => !el.isDeleted).map(el => el.id)
+            );
+
+            const prevActiveIds = prevActiveElementsRef.current;
+
+            // 计算新删除的元素（之前存在，现在不存在或被标记删除）
+            const newlyDeletedIds = Array.from(prevActiveIds).filter(
+                id => !currentActiveIds.has(id)
+            );
+
+            if (newlyDeletedIds.length > 0) {
+                console.log('[Canvas] Detected deleted elements:', newlyDeletedIds);
+
+                // 立即清理数据库绑定记录
+                const { deleteBindingsByElementIds } = await import('@/actions/canvas-bindings');
+                const result = await deleteBindingsByElementIds(canvasId, newlyDeletedIds);
+
+                if (result.success && result.deletedCount > 0) {
+                    console.log('[Canvas] Cleaned up', result.deletedCount, 'bindings');
+
+                    // 通知Editor立即移除UI标记
+                    window.dispatchEvent(new CustomEvent('binding:element-deleted', {
+                        detail: {
+                            elementIds: newlyDeletedIds,
+                            deletedBindings: result.deletedBindings
+                        }
+                    }));
+
+                    // 刷新绑定列表
+                    window.dispatchEvent(new Event('refresh-bindings'));
+                }
+            }
+
+            // 更新引用
+            prevActiveElementsRef.current = currentActiveIds;
+        }, 500), // 500ms防抖，避免过度触发
         []
     );
 
@@ -339,7 +374,8 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
             onChange([...elements], appState);
         }
 
-        broadcastElementStatus(elements);
+        // 企业级删除检测与清理
+        detectAndCleanupDeletedBindings(canvasId, elements);
 
         // Viewport tracking removed for performance (native Excalidraw links used instead)
 
