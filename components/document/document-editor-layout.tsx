@@ -176,6 +176,7 @@ export const DocumentEditorLayout = ({
                     >
                         <div className="flex-1 relative border-l border-white/5 overflow-hidden shadow-inner">
                             <ExcalidrawCanvas
+                                key={documentId}
                                 documentId={documentId}
                             />
                         </div>
