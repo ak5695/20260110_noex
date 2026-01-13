@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { List, ChevronRight } from "lucide-react";
+import { List, ChevronRight, X } from "lucide-react";
 
 interface HeadingItem {
   id: string;
@@ -13,9 +13,10 @@ interface HeadingItem {
 interface DocumentOutlineProps {
   editorDocument: any; // BlockNote document
   className?: string;
+  onClose?: () => void;
 }
 
-export const DocumentOutline = ({ editorDocument, className }: DocumentOutlineProps) => {
+export const DocumentOutline = ({ editorDocument, className, onClose }: DocumentOutlineProps) => {
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
 
   // Extract headings from BlockNote document
@@ -113,10 +114,21 @@ export const DocumentOutline = ({ editorDocument, className }: DocumentOutlinePr
   }
 
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
-      <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40">
-        <List className="h-3.5 w-3.5" />
-        <span>Outline</span>
+    <div className={cn("flex flex-col h-full bg-background/95 backdrop-blur", className)}>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <List className="h-4 w-4" />
+          <span>Table of Contents</span>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-muted/80 rounded-md transition-colors text-muted-foreground hover:text-foreground"
+            aria-label="Close outline"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col gap-0.5 p-2">

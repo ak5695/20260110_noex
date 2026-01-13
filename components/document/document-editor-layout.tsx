@@ -109,13 +109,31 @@ export const DocumentEditorLayout = ({
                                 </div>
                             </div>
 
-                            {/* Outline - Absolute to Editor Panel */}
-                            {isOutlineOpen && (
-                                <div className="fixed top-24 bottom-4 right-6 w-64 bg-background/95 backdrop-blur-md border border-border/40 rounded-xl shadow-xl overflow-hidden z-40 hidden xl:block animate-in fade-in slide-in-from-right-4">
-                                    <DocumentOutline editorDocument={editorDocument} className="h-full overflow-y-auto custom-scrollbar" />
-                                </div>
-                            )}
+
                         </div>
+
+                        {/* Outline Drawer - Sliding from Right */}
+                        <div
+                            className={cn(
+                                "absolute top-0 right-0 bottom-0 w-80 bg-background/80 backdrop-blur-xl border-l border-border/50 shadow-2xl z-[60]",
+                                "transition-transform duration-300 ease-in-out will-change-transform",
+                                isOutlineOpen ? "translate-x-0" : "translate-x-full"
+                            )}
+                        >
+                            <DocumentOutline
+                                editorDocument={editorDocument}
+                                className="h-full overflow-y-auto custom-scrollbar"
+                                onClose={toggleOutline}
+                            />
+                        </div>
+
+                        {/* Backdrop for closing */}
+                        {isOutlineOpen && (
+                            <div
+                                className="absolute inset-0 z-[55] bg-background/20 backdrop-blur-[2px] animate-in fade-in duration-300"
+                                onClick={toggleOutline}
+                            />
+                        )}
                     </div>
                 </Panel>
 
