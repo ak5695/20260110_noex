@@ -235,11 +235,14 @@ export async function saveCanvasElements(
     let insertedCount = 0;
     let updatedCount = 0;
 
-    const CHUNK_SIZE = 50;
+    // Optimization: Create Map for O(1) index lookup
+    const indexMap = new Map(elements.map((el, index) => [el.id, index]));
+
+    const CHUNK_SIZE = 20; // Reduced to prevent max_allowed_packet or timeout errors
     for (let i = 0; i < elements.length; i += CHUNK_SIZE) {
       const chunk = elements.slice(i, i + CHUNK_SIZE);
       const values = chunk.map((el) => {
-        const originalIndex = elements.findIndex(item => item.id === el.id);
+        const originalIndex = indexMap.get(el.id) ?? 0;
         return {
           id: el.id,
           canvasId,
@@ -250,7 +253,7 @@ export async function saveCanvasElements(
           height: el.height,
           angle: el.angle || 0,
           data: el,
-          zIndex: originalIndex >= 0 ? originalIndex : 0,
+          zIndex: originalIndex,
           version: el.version || 1,
           isDeleted: el.isDeleted || false,
           updatedAt: new Date()
@@ -274,7 +277,7 @@ export async function saveCanvasElements(
         }
       });
 
-      updatedCount += chunk.length; // Simplification: assume all processed
+      updatedCount += chunk.length;
     }
 
     // Update canvas metadata

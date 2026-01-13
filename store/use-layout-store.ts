@@ -27,6 +27,8 @@ interface LayoutStore {
     openCanvas: () => void;
     closeCanvas: () => void;
     setCanvasFullscreen: (isFullscreen: boolean) => void;
+    splitPercentage: number;
+    setSplitPercentage: (percentage: number) => void;
 }
 
 export const useLayoutStore = create<LayoutStore>((set, get) => ({
@@ -87,6 +89,10 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
             set({ isCanvasFullscreen: false });
         }
     },
+
+    // Resizable Splitter
+    splitPercentage: 50,
+    setSplitPercentage: (percentage: number) => set({ splitPercentage: percentage }),
 }));
 
 /**
@@ -100,3 +106,6 @@ export const useCanvasFullscreen = () =>
 
 export const useOutlineOpen = () =>
     useLayoutStore((state) => state.isOutlineOpen);
+
+export const useSplitPercentage = () =>
+    useLayoutStore((state) => state.splitPercentage);

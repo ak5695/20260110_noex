@@ -738,6 +738,9 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
             {/* Note: Drag overlay removed for cleaner UX */}
 
 
+
+
+
             <Excalidraw
                 excalidrawAPI={(api: any) => setExcalidrawAPI(api)}
                 theme={resolvedTheme === "dark" ? "dark" : "light"}
@@ -767,6 +770,7 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
             <ConnectionPointsOverlay excalidrawAPI={excalidrawAPI} containerRef={containerRef} />
 
             {/* Status Indicator (Enterprise Grade) */}
+            {/* Status Indicator (Enterprise Grade) */}
             <div className="absolute top-36 left-4 z-50 pointer-events-none flex items-center gap-2 px-3 py-1.5 bg-white/90 dark:bg-[#1e1e1e]/90 backdrop-blur rounded-full shadow-sm text-xs font-medium border border-gray-200 dark:border-gray-700 transition-all duration-300 origin-left">
                 {saveStatus === "saving" && (
                     <>
@@ -788,10 +792,6 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
                     </>
                 )}
             </div>
-
-            {onToggleFullscreen && (
-                <ToolbarPortal isFullscreen={isFullscreen} onToggle={onToggleFullscreen} />
-            )}
         </div>
     );
 };

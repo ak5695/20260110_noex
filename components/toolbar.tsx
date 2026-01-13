@@ -46,6 +46,7 @@ export const Toolbar = ({ initialData, preview }: ToolbarProps) => {
       icon: initialData.icon,
       version: initialData.version,
       userId: initialData.userId,
+      parentDocumentId: initialData.parentDocumentId,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData.id]); // Only re-init when document ID changes

@@ -95,6 +95,7 @@ export const DocumentList = ({
                 icon: doc.icon,
                 version: doc.version,
                 userId: doc.userId,
+                parentDocumentId: doc.parentDocumentId,
               });
 
               // 2. Sync full document to persistent IndexedDB cache

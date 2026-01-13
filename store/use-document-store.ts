@@ -18,6 +18,7 @@ interface DocumentMetadata {
     icon?: string | null;
     version: number;
     userId: string;
+    parentDocumentId?: string | null;
 }
 
 interface DocumentStore {
@@ -72,7 +73,33 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
             return { documents: newDocs };
         });
 
-        // 2. Debounced persistence to backend
+        // 2. Immediate Local Cache Update (Async)
+        Promise.all([
+            import("@/lib/cache/document-cache"),
+            import("@/lib/cache/sidebar-cache")
+        ]).then(([{ documentCache }, { sidebarCache }]) => {
+            // Update Document Cache
+            documentCache.get(documentId).then((cached) => {
+                if (cached) {
+                    documentCache.set(documentId, { ...cached, title });
+                }
+            });
+
+            // Update Sidebar Cache
+            const parentId = doc.parentDocumentId || "root";
+            sidebarCache.get(parentId).then((list) => {
+                if (list && Array.isArray(list)) {
+                    const idx = list.findIndex((d: any) => d.id === documentId);
+                    if (idx !== -1) {
+                        const newList = [...list];
+                        newList[idx] = { ...newList[idx], title };
+                        sidebarCache.set(parentId, newList);
+                    }
+                }
+            });
+        });
+
+        // 3. Debounced persistence to backend
         writeQueue.queueUpdate({
             documentId,
             fieldName: "title",
@@ -104,7 +131,33 @@ export const useDocumentStore = create<DocumentStore>((set, get) => ({
             return { documents: newDocs };
         });
 
-        // 2. Immediate persistence (icons are instant, no debounce)
+        // 2. Immediate Local Cache Update
+        Promise.all([
+            import("@/lib/cache/document-cache"),
+            import("@/lib/cache/sidebar-cache")
+        ]).then(([{ documentCache }, { sidebarCache }]) => {
+            // Update Document Cache
+            documentCache.get(documentId).then((cached) => {
+                if (cached) {
+                    documentCache.set(documentId, { ...cached, icon });
+                }
+            });
+
+            // Update Sidebar Cache
+            const parentId = doc.parentDocumentId || "root";
+            sidebarCache.get(parentId).then((list) => {
+                if (list && Array.isArray(list)) {
+                    const idx = list.findIndex((d: any) => d.id === documentId);
+                    if (idx !== -1) {
+                        const newList = [...list];
+                        newList[idx] = { ...newList[idx], icon };
+                        sidebarCache.set(parentId, newList);
+                    }
+                }
+            });
+        });
+
+        // 3. Immediate persistence (icons are instant, no debounce)
         writeQueue.queueUpdate({
             documentId,
             fieldName: "icon",
