@@ -32,15 +32,31 @@ export const DocumentEditorLayout = ({
     documentId,
     onChange
 }: DocumentEditorLayoutProps) => {
-    // UI State
-    const [editorDocument, setEditorDocument] = useState<any>(null);
+    // Helper to parse content optimistically
+    const parseInitialContent = useMemo(() => {
+        return (contentJson: string | null) => {
+            if (!contentJson) return [];
+            try {
+                return JSON.parse(contentJson);
+            } catch (e) {
+                console.error("Failed to parse initial content for outline", e);
+                return [];
+            }
+        };
+    }, []);
 
-    // Reset outline when document changes to avoid stale data
+    // UI State - Initialize from prop immediately for instant render
+    const [editorDocument, setEditorDocument] = useState<any>(() => {
+        return parseInitialContent(document.content);
+    });
+
+    // Reset/Update outline when document changes
     useEffect(() => {
-        setEditorDocument(null);
-    }, [documentId]);
+        // Optimistically set content from props while waiting for editor
+        setEditorDocument(parseInitialContent(document.content));
+    }, [documentId, document.content, parseInitialContent]);
 
-    // Debounce outline updates to improve performance
+    // Debounce outline updates from editor (keep this for live typing updates)
     const debouncedSetEditorDocument = useMemo(
         () => debounce((doc: any) => setEditorDocument(doc), 1000),
         []
