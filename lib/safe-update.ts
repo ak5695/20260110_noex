@@ -18,7 +18,8 @@ import { eq, and, sql } from "drizzle-orm";
 import { OptimisticLockError } from "./errors";
 
 // Re-export for convenience
-export { OptimisticLockError };
+export { OptimisticLockError } from "./errors";
+console.log("[SAFE-UPDATE] Intializing safe-update module");
 
 /**
  * Update result with version information
@@ -115,7 +116,7 @@ async function writeAuditLog(entry: AuditEntry): Promise<void> {
  * }
  * ```
  */
-export async function safeUpdateDocument(params: {
+export const safeUpdateDocument = async (params: {
   documentId: string;
   updates: Partial<{
     title: string;
@@ -126,7 +127,8 @@ export async function safeUpdateDocument(params: {
     isArchived: boolean;
   }>;
   options: SafeUpdateOptions;
-}): Promise<SafeUpdateResult<typeof documents.$inferSelect>> {
+}): Promise<SafeUpdateResult<typeof documents.$inferSelect>> => {
+  console.log("[SAFE-UPDATE] Executing safeUpdateDocument for:", params.documentId);
   const { documentId, updates, options } = params;
   const { expectedVersion, userId, skipVersionCheck = false } = options;
 
@@ -240,10 +242,10 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
  * Retries on transient errors (network, database connection)
  * Does NOT retry on logical errors (not found, validation)
  */
-export async function withRetry<T>(
+export const withRetry = async <T>(
   operation: () => Promise<T>,
   config: Partial<RetryConfig> = {}
-): Promise<T> {
+): Promise<T> => {
   const { maxAttempts, baseDelay, maxDelay } = {
     ...DEFAULT_RETRY_CONFIG,
     ...config,
@@ -292,14 +294,15 @@ export async function withRetry<T>(
 /**
  * Safely create a new document with audit trail
  */
-export async function safeCreateDocument(params: {
+export const safeCreateDocument = async (params: {
   id?: string;
   title: string;
   userId: string;
   parentDocumentId?: string;
   ipAddress?: string;
   userAgent?: string;
-}): Promise<typeof documents.$inferSelect> {
+}): Promise<typeof documents.$inferSelect> => {
+  console.log("[SAFE-UPDATE] Executing safeCreateDocument for:", params.title);
   const { id, title, userId, parentDocumentId, ipAddress, userAgent } = params;
 
   // Create document (no transaction support in neon-http)
@@ -336,11 +339,11 @@ export async function safeCreateDocument(params: {
 /**
  * Safely archive document with transaction
  */
-export async function safeArchiveDocument(params: {
+export const safeArchiveDocument = async (params: {
   documentId: string;
   userId: string;
   expectedVersion: number;
-}): Promise<void> {
+}): Promise<void> => {
   const { documentId, userId, expectedVersion } = params;
 
   await safeUpdateDocument({
@@ -353,10 +356,10 @@ export async function safeArchiveDocument(params: {
 /**
  * Get document with version for optimistic locking
  */
-export async function getDocumentWithVersion(
+export const getDocumentWithVersion = async (
   documentId: string,
   userId: string
-): Promise<{ document: typeof documents.$inferSelect; version: number } | null> {
+): Promise<{ document: typeof documents.$inferSelect; version: number } | null> => {
   const document = await db.query.documents.findFirst({
     where: and(
       eq(documents.id, documentId),

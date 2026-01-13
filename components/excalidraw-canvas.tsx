@@ -72,21 +72,39 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
     } = useCanvasSync(documentId, excalidrawAPI);
 
     // 1.25 Stabilize initialData to prevent "controlled to uncontrolled" errors
-    // We memoize this so it only changes when essentially needed (e.g. initial content arrival)
+    // Identity stability of initialData is critical for Excalidraw's internal state management.
+    // We use a ref to ensure that once the initial state is captured, it NEVER changes identity.
+    const initialDataRef = useRef<any>(null);
     const initialData = useMemo(() => {
-        if (!isLoaded && initialElements.length === 0) return null;
+        // Wait until canvasId and elements are ready
+        if (!isLoaded || !canvasId) return null;
 
-        return {
+        // If we already captured the initial data for this mount session, return it
+        if (initialDataRef.current) return initialDataRef.current;
+
+        // Capture initial state
+        const data = {
             elements: initialElements || [],
             appState: {
                 viewBackgroundColor: resolvedTheme === "dark" ? "#121212" : "#ffffff",
                 currentItemStrokeColor: resolvedTheme === "dark" ? "#ffffff" : "#000000",
                 name: "Jotion Workspace",
                 collaborators: new Map(),
+                isLoading: false,
+                // Add more stable defaults to prevent "undefined" drift in internal inputs
+                currentItemFontFamily: 1,
+                viewModeEnabled: false,
+                gridModeEnabled: false,
+                theme: resolvedTheme === "dark" ? "dark" : "light",
+                user: { name: "Collaborator" },
             },
             scrollToContent: true,
         };
-    }, [isLoaded, initialElements, resolvedTheme]);
+
+        initialDataRef.current = data;
+        console.log("[Canvas] initialData stabilized for documentId:", documentId);
+        return data;
+    }, [isLoaded, canvasId, initialElements, resolvedTheme, documentId]);
 
     const [isDragOver, setIsDragOver] = useState(false);
     const [bindings, setBindings] = useState<any[]>([]);
@@ -125,7 +143,7 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
 
     // 1. Navigation Helper (Jump to Block)
     const { jumpToElement } = useNavigationStore();
-    const jumpToBlock = (blockId: string, text: string, focusElementId?: string) => {
+    const jumpToBlock = useCallback((blockId: string, text: string, focusElementId?: string) => {
         // ... (existing)
         const element = document.querySelector(`[data-id="${blockId}"]`);
         if (element) {
@@ -140,7 +158,7 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
             console.warn("[Canvas] Block not found in DOM:", blockId);
             toast.error("Block not found in current view");
         }
-    };
+    }, [documentId]);
 
     const clearElementTarget = useCallback(() => {
         const { elementTarget } = useNavigationStore.getState();
@@ -177,6 +195,23 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
         clearElementTarget();
     }, [elementTarget, excalidrawAPI, clearElementTarget]);
 
+    // 1.85 Handle Link Click from Canvas (Targeted Highlight)
+    const handleLinkOpen = useCallback((element: any, event: any) => {
+        if (element.link && element.link.startsWith("jotion://block/")) {
+            event.preventDefault();
+            const blockId = element.link.replace("jotion://block/", "");
+
+            // Use Zustand store to navigate to block
+            // Pass element.id for targeted highlighting in editor
+            jumpToBlock(
+                blockId,
+                'text' in element ? (element as any).text : "Linked Block",
+                element.id
+            );
+            console.log("[Canvas] Intercepted link click, jumping to block:", blockId, "focus element:", element.id);
+        }
+    }, [jumpToBlock]);
+
 
 
 
@@ -212,7 +247,7 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
     );
 
     // Excalidraw onChange fires on EVERY event
-    const handleCanvasChange = (elements: readonly any[], appState: any) => {
+    const handleCanvasChange = useCallback((elements: readonly any[], appState: any) => {
         if (!isLoaded || !canvasId) return;
 
         // Propagate to parent if needed
@@ -273,7 +308,7 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
             y: appState.scrollY,
             zoom: appState.zoom.value
         });
-    };
+    }, [isLoaded, canvasId, onChange, detectAndCleanupDeletedBindings, bindings, jumpToBlock, syncElements, syncViewport]);
 
     // 3. Real-time Content Sync Listener (Document -> Canvas)
     useEffect(() => {
@@ -588,21 +623,7 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
                     theme={resolvedTheme === "dark" ? "dark" : "light"}
                     initialData={initialData}
                     onChange={handleCanvasChange}
-                    onLinkOpen={(element, event) => {
-                        if (element.link && element.link.startsWith("jotion://block/")) {
-                            event.preventDefault();
-                            const blockId = element.link.replace("jotion://block/", "");
-
-                            // Use Zustand store to navigate to block
-                            // Pass element.id for targeted highlighting in editor
-                            jumpToBlock(
-                                blockId,
-                                'text' in element ? (element as any).text : "Linked Block",
-                                element.id
-                            );
-                            console.log("[Canvas] Intercepted link click, jumping to block:", blockId, "focus element:", element.id);
-                        }
-                    }}
+                    onLinkOpen={handleLinkOpen}
                 />
             )}
 

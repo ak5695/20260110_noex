@@ -136,57 +136,61 @@ export const create = async (args: { id?: string, title: string, parentDocumentI
     const user = await getUser()
     if (!user) throw new Error("Unauthorized")
 
-    // Use safe create with audit trail
+    console.log("[DOCUMENTS-ACTION] Attempting to call safeCreateDocument with:", args.title);
+    console.log("[DOCUMENTS-ACTION] safeCreateDocument type:", typeof safeCreateDocument);
+
     const newDoc = await safeCreateDocument({
         id: args.id,
         title: args.title,
         userId: user.id,
         parentDocumentId: args.parentDocumentId,
-    })
+    });
 
-        // ⚡ Notion-like Performance: Async parent update & caching (non-blocking)
-        // 将所有非核心任务放到异步队列，且不阻塞主响应
-        (async () => {
-            try {
-                if (args.parentDocumentId) {
-                    const parent = await getDocumentWithVersion(args.parentDocumentId!, user.id);
-                    if (parent) {
-                        let content: any[] = [];
-                        try {
-                            content = parent.document.content ? JSON.parse(parent.document.content) : [];
-                        } catch (e) { content = []; }
+    console.log("[DOCUMENTS-ACTION] Successfully created document:", newDoc.id);
 
-                        const pageBlock = {
-                            id: Math.random().toString(36).substring(2, 11),
-                            type: "page",
-                            props: {
-                                backgroundColor: "default",
-                                textColor: "default",
-                                textAlignment: "left",
-                                pageId: newDoc.id,
-                                title: args.title
-                            },
-                            children: []
-                        };
+    // ⚡ Notion-like Performance: Async parent update & caching (non-blocking)
+    // 将所有非核心任务放到异步队列，且不阻塞主响应
+    (async () => {
+        try {
+            if (args.parentDocumentId) {
+                const parent = await getDocumentWithVersion(args.parentDocumentId!, user.id);
+                if (parent) {
+                    let content: any[] = [];
+                    try {
+                        content = parent.document.content ? JSON.parse(parent.document.content) : [];
+                    } catch (e) { content = []; }
 
-                        content.push(pageBlock);
+                    const pageBlock = {
+                        id: Math.random().toString(36).substring(2, 11),
+                        type: "page",
+                        props: {
+                            backgroundColor: "default",
+                            textColor: "default",
+                            textAlignment: "left",
+                            pageId: newDoc.id,
+                            title: args.title
+                        },
+                        children: []
+                    };
 
-                        await safeUpdateDocument({
-                            documentId: parent.document.id,
-                            updates: { content: JSON.stringify(content) },
-                            options: {
-                                expectedVersion: parent.version,
-                                userId: user.id
-                            }
-                        });
+                    content.push(pageBlock);
 
-                        await documentCache.invalidate(parent.document.id);
-                    }
+                    await safeUpdateDocument({
+                        documentId: parent.document.id,
+                        updates: { content: JSON.stringify(content) },
+                        options: {
+                            expectedVersion: parent.version,
+                            userId: user.id
+                        }
+                    });
+
+                    await documentCache.invalidate(parent.document.id);
                 }
-            } catch (error) {
-                console.error("[NotionSync] Background maintenance failed:", error);
             }
-        })();
+        } catch (error) {
+            console.error("[NotionSync] Background maintenance failed:", error);
+        }
+    })();
 
     // ✅ 立即返回新文档，毫秒级响应
     return newDoc
