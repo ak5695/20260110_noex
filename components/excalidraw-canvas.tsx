@@ -212,18 +212,24 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
         const loadBindings = async () => {
             if (canvasId) {
                 // 步骤1：初始化 ExistenceEngine（EAS核心）
-                const { existenceEngine } = await import('@/lib/existence-engine');
-                await existenceEngine.initialize(canvasId);
-                console.log('[Canvas] ExistenceEngine initialized');
+                const { initializeExistenceEngine, reconcileBindings } = await import('@/actions/canvas');
+                const initResult = await initializeExistenceEngine(canvasId);
+                if (initResult.success) {
+                    console.log('[Canvas] ExistenceEngine initialized');
+                } else {
+                    console.error('[Canvas] ExistenceEngine initialization failed:', initResult.error);
+                }
 
                 // 步骤2：和解修复不一致（自动修复高置信度问题）
-                const reconcileResult = await existenceEngine.reconcile(canvasId, true);
-                if (reconcileResult.autoFixed > 0) {
-                    toast.info(`Auto-fixed ${reconcileResult.autoFixed} inconsistencies`);
-                    console.log('[Canvas] Reconciliation:', reconcileResult);
-                }
-                if (reconcileResult.requiresHumanReview > 0) {
-                    toast.warning(`${reconcileResult.requiresHumanReview} bindings require review`);
+                const reconcileResult = await reconcileBindings(canvasId);
+                if (reconcileResult.success) {
+                    if (reconcileResult.autoFixed > 0) {
+                        toast.info(`Auto-fixed ${reconcileResult.autoFixed} inconsistencies`);
+                        console.log('[Canvas] Reconciliation:', reconcileResult);
+                    }
+                    if (reconcileResult.requiresReview > 0) {
+                        toast.warning(`${reconcileResult.requiresReview} bindings require review`);
+                    }
                 }
 
                 // 步骤3：加载活跃绑定（仅加载未删除的）
@@ -369,11 +375,11 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange, isFullscreen
                 console.log('[Canvas] Detected deleted elements:', newlyDeletedIds);
 
                 // 使用 ExistenceEngine 隐藏绑定（不硬删除）
-                const { existenceEngine } = await import('@/lib/existence-engine');
-                const hiddenCount = await existenceEngine.hideByElementIds(newlyDeletedIds);
+                const { hideBindingsByElementIds } = await import('@/actions/canvas');
+                const result = await hideBindingsByElementIds(canvasId, newlyDeletedIds);
 
-                if (hiddenCount > 0) {
-                    console.log('[Canvas] Hid', hiddenCount, 'bindings via ExistenceEngine');
+                if (result.success && result.hiddenCount > 0) {
+                    console.log('[Canvas] Hid', result.hiddenCount, 'bindings via ExistenceEngine');
                     // Events are automatically emitted by ExistenceEngine (binding:hidden)
                     // Editor will listen to these events and apply CSS ghosting
 

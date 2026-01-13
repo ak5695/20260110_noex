@@ -391,6 +391,53 @@ export async function clearCanvas(canvasId: string) {
  */
 
 /**
+ * Initialize ExistenceEngine for a canvas
+ */
+export async function initializeExistenceEngine(canvasId: string) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const { existenceEngine } = await import('@/lib/existence-engine');
+    await existenceEngine.initialize(canvasId);
+
+    return { success: true };
+  } catch (error) {
+    console.error("[initializeExistenceEngine] Error:", error);
+    return { success: false, error: "Failed to initialize ExistenceEngine" };
+  }
+}
+
+/**
+ * Hide bindings by element IDs (batch operation)
+ * Returns count of hidden bindings
+ */
+export async function hideBindingsByElementIds(canvasId: string, elementIds: string[]) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized", hiddenCount: 0 };
+    }
+
+    const { existenceEngine } = await import('@/lib/existence-engine');
+    const hiddenCount = await existenceEngine.hideByElementIds(elementIds, session.user.id);
+
+    return { success: true, hiddenCount };
+  } catch (error) {
+    console.error("[hideBindingsByElementIds] Error:", error);
+    return { success: false, error: "Failed to hide bindings", hiddenCount: 0 };
+  }
+}
+
+/**
  * Hide bindings (soft delete via ExistenceEngine)
  * Uses EAS to transition bindings to 'hidden' state
  */

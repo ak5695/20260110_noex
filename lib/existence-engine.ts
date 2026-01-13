@@ -7,7 +7,11 @@
  * This engine treats existence as a state judgment rather than physical deletion.
  * BindingEntity.currentStatus is the single source of truth.
  * Canvas nodes and Document marks are merely projections of this truth.
+ *
+ * IMPORTANT: This module must run server-side only due to database access.
  */
+
+import 'server-only';
 
 import { EventEmitter } from 'events';
 import { db } from '@/db';
