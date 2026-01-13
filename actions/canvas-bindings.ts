@@ -443,3 +443,42 @@ export async function batchUpdateBindingStatus(
     };
   }
 }
+
+/**
+ * Get bindings for a document
+ * Simplified access pattern for Editor which knows documentId but not canvasId
+ */
+export async function getDocumentBindings(documentId: string) {
+  try {
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
+
+    if (!session?.user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const bindings = await db
+      .select({
+        ...getTableColumns(documentCanvasBindings),
+        isElementDeleted: canvasElements.isDeleted
+      })
+      .from(documentCanvasBindings)
+      .leftJoin(canvasElements, and(
+        eq(documentCanvasBindings.elementId, canvasElements.id),
+        eq(documentCanvasBindings.canvasId, canvasElements.canvasId)
+      ))
+      .where(eq(documentCanvasBindings.documentId, documentId));
+
+    return {
+      success: true,
+      bindings,
+    };
+  } catch (error) {
+    console.error("[getDocumentBindings] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch bindings",
+    };
+  }
+}

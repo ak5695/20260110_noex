@@ -139,8 +139,9 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
         const element = elements.find((el: any) => el.id === elementTarget.id);
 
         if (element) {
-            // Focus and zoom to element
-            excalidrawAPI.scrollToContent(element, { fitToViewport: true, padding: 100 });
+            // Focus to element (keep current zoom)
+            // MUST pass array to scrollToContent
+            excalidrawAPI.scrollToContent([element], { fitToViewport: false, animate: true });
             excalidrawAPI.updateScene({
                 appState: {
                     ...excalidrawAPI.getAppState(),

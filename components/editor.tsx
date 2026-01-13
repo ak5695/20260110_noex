@@ -33,7 +33,7 @@ import { create as serverCreateDocument } from "@/actions/documents";
 import { useSemanticSync } from "@/store/use-semantic-sync";
 import { useNavigationStore, useBlockTarget } from "@/store/use-navigation-store";
 import { AiChatModal } from "./ai-chat-modal";
-import { getCanvasBindings } from "@/actions/canvas-bindings";
+import { useBindingSync } from "@/hooks/use-binding-sync"; // Import hook
 
 // Dynamic import for Excalidraw
 const Excalidraw = dynamic(
@@ -253,7 +253,21 @@ const CanvasLinkStyle = createReactStyleSpec(
   },
   {
     render: (props) => (
-      <span className="canvas-bound-text" data-canvas-link={props.value} ref={props.contentRef} />
+      <span
+        className="canvas-bound-text cursor-pointer transition-colors rounded-sm px-0.5"
+        style={{
+          color: '#ea580c', // orange-600
+          backgroundColor: '#fee2e2', // red-100
+          borderBottom: '1px solid #fed7aa', // orange-200
+        }}
+        data-canvas-link={props.value}
+        ref={props.contentRef}
+        onClick={(e) => {
+          e.stopPropagation(); // prevent block selection if needed
+          // Connect to Zustand store for robust navigation
+          useNavigationStore.getState().jumpToElement(props.value);
+        }}
+      />
     ),
   }
 );
@@ -393,12 +407,12 @@ const EditorBindingOverlay = ({ bindings, editor, jumpToElement, activeBlockId }
           >
             {/* Spotlight Effect */}
             {isActive && (
-              <div className={`absolute inset-0 bg-orange-500/10 border-orange-500 animate-pulse shadow-[0_0_30px_rgba(249,115,22,0.15)] ${m.isInline ? 'rounded border-b-2' : 'border-l-4 rounded-r-md'}`} />
+              <div className={`absolute inset-0 bg-red-500/10 border-orange-500 animate-pulse shadow-[0_0_30px_rgba(249,115,22,0.15)] ${m.isInline ? 'rounded border-b-2' : 'border-l-4 rounded-r-md'}`} />
             )}
 
             {/* Visual Gutter Line (Normal State) - Block Only */}
             {!isActive && !m.isInline && (
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500 rounded-r shadow-[0_0_8px_rgba(249,115,22,0.4)] opacity-80" />
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-600 rounded-r shadow-[0_0_8px_rgba(249,115,22,0.4)] opacity-80" />
             )}
 
             {/* Interactive Icon */}
@@ -497,7 +511,7 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
   const { activeNodeId, setActiveNode } = useSemanticSync();
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiModalPosition, setAiModalPosition] = useState({ top: 0, left: 0 });
-  const [bindings, setBindings] = useState<any[]>([]);
+  const { bindings } = useBindingSync(documentId); // Cache-first Sync
   const [deletedElementIds, setDeletedElementIds] = useState<Set<string>>(new Set());
   const [hasLiveInfo, setHasLiveInfo] = useState(false);
   const router = useRouter();
@@ -634,29 +648,40 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
 
       console.log("[Editor] Canvas binding success event received:", { elementId, blockId, optimistic });
 
-      // 从 sessionStorage 获取保存的选区信息
-      const savedSelectionStr = sessionStorage.getItem('pendingDragSelection');
-      if (!savedSelectionStr) {
-        console.warn("[Editor] No saved selection found in sessionStorage");
-        return;
+      // 1. Try to get selection info from metadata (Reliable - passed via Drag Payload)
+      let savedSelection: { blockId: string; selectedText: string; timestamp: number } | null = null;
+      const metadataFn = e.detail.metadata;
+
+      if (metadataFn && metadataFn.selectionInfo) {
+        savedSelection = metadataFn.selectionInfo;
+        console.log("[Editor] Using selection info from metadata:", savedSelection);
+      }
+      // 2. Fallback to sessionStorage (Legacy/Unreliable)
+      else {
+        const savedSelectionStr = sessionStorage.getItem('pendingDragSelection');
+        if (savedSelectionStr) {
+          try {
+            savedSelection = JSON.parse(savedSelectionStr);
+            console.log("[Editor] Using selection info from sessionStorage");
+          } catch (e) {
+            console.error("[Editor] Failed to parse saved selection:", e);
+          }
+        }
       }
 
-      let savedSelection: { blockId: string; selectedText: string; timestamp: number } | null = null;
-      try {
-        savedSelection = JSON.parse(savedSelectionStr);
-      } catch (e) {
-        console.error("[Editor] Failed to parse saved selection:", e);
+      if (!savedSelection) {
+        console.warn("[Editor] No selection info found (neither in metadata nor sessionStorage)");
         return;
       }
 
       // 验证选区信息的有效性（5秒内有效）
+      // If from metadata, it's part of the transaction, so usually valid.
       const isValid = savedSelection &&
-        savedSelection.blockId === blockId &&
-        (Date.now() - savedSelection.timestamp) < 5000;
+        savedSelection.blockId === blockId;
+      // && (Date.now() - savedSelection.timestamp) < 5000; // Relax timestamp check for robustness
 
       if (!isValid) {
-        console.warn("[Editor] Saved selection is invalid or expired");
-        sessionStorage.removeItem('pendingDragSelection');
+        console.warn("[Editor] Selection info mismatch or invalid", { saved: savedSelection, current: blockId });
         return;
       }
 
@@ -693,7 +718,12 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
                 result.push({
                   type: 'text',
                   text: match,
-                  styles: { ...(item.styles || {}), canvasLink: elementId }
+                  styles: {
+                    ...(item.styles || {}),
+                    canvasLink: elementId,
+                    textColor: 'orange',
+                    backgroundColor: 'red'
+                  }
                 });
 
                 if (after) {
@@ -708,7 +738,7 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
 
           // 3. 更新 block 内容
           editor.updateBlock(block, { content: newContent });
-          console.log("[Editor] Applied canvasLink style to text:", savedSelection.selectedText);
+          console.log("[Editor] Applied canvasLink style + colors to text:", savedSelection.selectedText);
         }
       } catch (err) {
         console.error("[Editor] Failed to apply canvasLink style:", err);
@@ -718,8 +748,22 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
       sessionStorage.removeItem('pendingDragSelection');
     };
 
+    // Listen for direct text click to jump to canvas
+    const handleJumpToElement = (e: CustomEvent) => {
+      const { elementId } = e.detail;
+      if (elementId) {
+        console.log("[Editor] Jumping to canvas element:", elementId);
+        jumpToElement(elementId);
+      }
+    };
+
     window.addEventListener("document:canvas-binding-success", handleCanvasBindingSuccess as EventListener);
-    return () => window.removeEventListener("document:canvas-binding-success", handleCanvasBindingSuccess as EventListener);
+    window.addEventListener("canvas:jump-to-element", handleJumpToElement as EventListener);
+
+    return () => {
+      window.removeEventListener("document:canvas-binding-success", handleCanvasBindingSuccess as EventListener);
+      window.removeEventListener("canvas:jump-to-element", handleJumpToElement as EventListener);
+    };
   }, [editor]);
 
   // Restore cursor position when AI modal closes
@@ -791,34 +835,7 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
   }, [editor, setActiveNode]);
 
   // 3. Fetch Canvas Bindings
-  useEffect(() => {
-    const fetchBindings = async () => {
-      // First find the canvas for this document
-      // In a real app, we'd have a more direct way, but we can query by documentId
-      // However, getCanvasBindings needs canvasId. 
-      // We can use the same server action getOrCreateCanvas if we want, or add a dedicated one.
-      // For now, let's assume we can fetch by documentId if we had the right action.
-      // Let's use getCanvasBindings which we have, but we need to find canvasId first.
-      try {
-        const { getOrCreateCanvas } = await import("@/actions/canvas");
-        const res = await getOrCreateCanvas(documentId);
-        if (res.success && res.canvas) {
-          const bRes = await getCanvasBindings(res.canvas.id);
-          if (bRes.success) {
-            setBindings(bRes.bindings || []);
-          }
-        }
-      } catch (err) {
-        console.error("[Editor] Failed to fetch bindings:", err);
-      }
-    };
-    fetchBindings();
 
-    // Refresh bindings periodically or on specific events
-    const handleRefresh = () => fetchBindings();
-    window.addEventListener("refresh-bindings", handleRefresh);
-    return () => window.removeEventListener("refresh-bindings", handleRefresh);
-  }, [documentId]);
 
   // 【EAS】监听绑定状态变更事件，使用CSS Ghosting（非破坏性）
   useEffect(() => {
@@ -886,6 +903,7 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
 
   // Sync Deleted State from DB Bindings
   useEffect(() => {
+    if (!Array.isArray(bindings)) return;
     const dbDeleted = new Set(bindings.filter(b => b.isElementDeleted).map(b => b.elementId));
     if (!hasLiveInfo && dbDeleted.size > 0) {
       setDeletedElementIds(dbDeleted);
@@ -1267,6 +1285,7 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
         theme={resolvedTheme === "dark" ? "dark" : "light"}
         formattingToolbar={false}
       >
+        <FormattingToolbarController />
         <SuggestionMenuController
           triggerCharacter="/"
           getItems={async (query) =>

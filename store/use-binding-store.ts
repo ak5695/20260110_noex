@@ -36,6 +36,7 @@ interface BindingStore {
 
     // Actions
     initialize: (canvasId: string, bindings: any[]) => void;
+    setBindings: (bindings: any[]) => void;
 
     // Optimistic updates (instant)
     hideByElementId: (elementId: string) => void;
@@ -233,6 +234,18 @@ export const useBindingStore = create<BindingStore>((set, get) => ({
         });
 
         console.log('[BindingStore] Registered binding:', binding.id);
+    },
+
+    setBindings: (bindingsList: any[]) => {
+        const state = get();
+        // If we have bindings, try to infer canvasId if not set
+        let canvasId = state.currentCanvasId;
+        if (!canvasId && bindingsList.length > 0) {
+            canvasId = bindingsList[0].canvasId;
+        }
+
+        // delegated to initialize
+        state.initialize(canvasId || '', bindingsList);
     },
 
     getBindingByElementId: (elementId) => {

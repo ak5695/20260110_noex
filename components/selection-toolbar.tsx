@@ -149,6 +149,12 @@ export const SelectionToolbar: React.FC<SelectionToolbarProps> = ({
                 startOffset: window.getSelection()?.getRangeAt(0).startOffset,
                 endOffset: window.getSelection()?.getRangeAt(0).endOffset
             },
+            // Critical: Pass exact selection info for robust optimistic binding styles
+            selectionInfo: blockId ? {
+                blockId,
+                selectedText,
+                timestamp: Date.now()
+            } : undefined
         });
 
         e.dataTransfer.setData(DRAG_MIME_TYPE, dragDropBridge.serializeDragPayload(payload));

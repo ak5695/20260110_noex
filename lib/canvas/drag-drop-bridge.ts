@@ -61,14 +61,22 @@ export class DragDropBridge {
     semanticNodeId?: string;
     sourceType?: DragPayload["sourceType"];
     metadata?: any;
+    selectionInfo?: { blockId: string; selectedText: string; timestamp: number };
   }): DragPayload {
+    const metadata = { ...(config.metadata || {}) };
+
+    // Explicitly add selection info to metadata if provided
+    if (config.selectionInfo) {
+      metadata.selectionInfo = config.selectionInfo;
+    }
+
     return {
       sourceType: config.sourceType || "text",
       documentId: config.documentId,
       blockId: config.blockId,
       semanticNodeId: config.semanticNodeId,
       text: config.text,
-      metadata: config.metadata,
+      metadata, // Enhanced metadata
       timestamp: Date.now(),
     };
   }
