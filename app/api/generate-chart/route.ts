@@ -16,7 +16,7 @@ export async function POST(req: Request) {
             display_excalidraw: tool({
                 description: displayExcalidrawTool.display_excalidraw.description,
                 parameters: displayExcalidrawTool.display_excalidraw.inputSchema,
-                // We don't necessarily need execute for streaming to client, but good to have
+                execute: displayExcalidrawTool.display_excalidraw.execute,
             })
         },
         // Force the model to use the tool to generate the diagram
