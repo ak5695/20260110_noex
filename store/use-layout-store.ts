@@ -27,8 +27,13 @@ interface LayoutStore {
     openCanvas: () => void;
     closeCanvas: () => void;
     setCanvasFullscreen: (isFullscreen: boolean) => void;
+    setCanvasFullscreen: (isFullscreen: boolean) => void;
     splitPercentage: number;
     setSplitPercentage: (percentage: number) => void;
+
+    // Q&A List
+    isQaListOpen: boolean;
+    toggleQaList: () => void;
 }
 
 export const useLayoutStore = create<LayoutStore>((set, get) => ({
@@ -62,7 +67,10 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
      * Toggle document outline visibility
      */
     toggleOutline: () => {
-        set((state) => ({ isOutlineOpen: !state.isOutlineOpen }));
+        set((state) => ({
+            isOutlineOpen: !state.isOutlineOpen,
+            isQaListOpen: false // Mutual exclusivity
+        }));
     },
 
     /**
@@ -93,6 +101,13 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
     // Resizable Splitter
     splitPercentage: 50,
     setSplitPercentage: (percentage: number) => set({ splitPercentage: percentage }),
+
+    // Q&A List
+    isQaListOpen: false,
+    toggleQaList: () => set((state) => ({
+        isQaListOpen: !state.isQaListOpen,
+        isOutlineOpen: false // Mutual exclusivity
+    })),
 }));
 
 /**
@@ -107,5 +122,9 @@ export const useCanvasFullscreen = () =>
 export const useOutlineOpen = () =>
     useLayoutStore((state) => state.isOutlineOpen);
 
+export const useQaListOpen = () =>
+    useLayoutStore((state) => state.isQaListOpen);
+
 export const useSplitPercentage = () =>
     useLayoutStore((state) => state.splitPercentage);
+

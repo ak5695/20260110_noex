@@ -34,6 +34,7 @@ import { useSemanticSync } from "@/store/use-semantic-sync";
 import { useNavigationStore, useBlockTarget } from "@/store/use-navigation-store";
 import { AiChatModal } from "./ai-chat-modal";
 import { useBindingSync } from "@/hooks/use-binding-sync"; // Import hook
+import { ExcalidrawGenerationModal } from "./excalidraw-generation-modal";
 
 // Dynamic import for Excalidraw
 const Excalidraw = dynamic(
@@ -519,6 +520,12 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
   const { bindings } = useBindingSync(documentId); // Cache-first Sync
   const [deletedElementIds, setDeletedElementIds] = useState<Set<string>>(new Set());
   const [hasLiveInfo, setHasLiveInfo] = useState(false);
+
+  // Excalidraw Gen State
+  const [showExcalidrawGen, setShowExcalidrawGen] = useState(false);
+  const [excalidrawGenPrompt, setExcalidrawGenPrompt] = useState("");
+  const [excalidrawGenPos, setExcalidrawGenPos] = useState({ top: 0, left: 0 });
+
   const router = useRouter();
 
   // Use Zustand navigation store (Hoisted)
@@ -639,8 +646,42 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
     const editorElement = document.querySelector(".bn-container");
     if (editorElement) {
       editorElement.addEventListener("keydown", handleKeyDown as any, true);
-      return () => editorElement.removeEventListener("keydown", handleKeyDown as any, true);
     }
+
+    // Listen for external insert events (e.g. from Q&A List Global Chat)
+    const handleInsertText = async (e: CustomEvent) => {
+      if (editor && e.detail) {
+        const blocks = await editor.tryParseMarkdownToBlocks(e.detail);
+
+        // Insert at the end of the document
+        const runAsync = async () => {
+          const lastBlock = editor.document[editor.document.length - 1];
+          editor.insertBlocks(
+            blocks,
+            lastBlock,
+            "after"
+          );
+
+          // Scroll to bottom to show new content
+          // We need to wait for render or just use a simple timeout/scroll
+          setTimeout(() => {
+            const scrollingElement = document.querySelector(".h-full.overflow-y-auto.custom-scrollbar");
+            if (scrollingElement) {
+              scrollingElement.scrollTo({ top: scrollingElement.scrollHeight, behavior: 'smooth' });
+            }
+          }, 100);
+        };
+        runAsync();
+      }
+    };
+    window.addEventListener("editor:insert-text", handleInsertText as EventListener);
+
+    return () => {
+      if (editorElement) {
+        editorElement.removeEventListener("keydown", handleKeyDown as any, true);
+      }
+      window.removeEventListener("editor:insert-text", handleInsertText as EventListener);
+    };
   }, [editor, showAiModal]);
 
   // Listen for Drag Check-in (Feedback Loop - Drag to Bind)
@@ -861,7 +902,12 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
       console.log('[Editor] Binding hidden:', bindingId, elementId);
 
       // 从 state 移除（UI不再显示为活跃）
-      setBindings(prev => prev.filter(b => b.id !== bindingId));
+      setDeletedElementIds(prev => {
+        const next = new Set(prev);
+        next.add(elementId);
+        return next;
+      });
+      setHasLiveInfo(true);
 
       // 应用 CSS ghosting（非破坏性，可恢复）
       const boundTexts = document.querySelectorAll(
@@ -876,6 +922,12 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
     const handleBindingShown = (e: CustomEvent) => {
       const { bindingId, elementId } = e.detail;
       console.log('[Editor] Binding shown (restore):', bindingId, elementId);
+
+      setDeletedElementIds(prev => {
+        const next = new Set(prev);
+        next.delete(elementId);
+        return next;
+      });
 
       // 移除 CSS ghosting
       const boundTexts = document.querySelectorAll(
@@ -1379,6 +1431,11 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
         onEnsureCanvas={() => {
           // Optionally open canvas panel
         }}
+        onGenerateChart={(text, position) => {
+          setExcalidrawGenPrompt(text);
+          setExcalidrawGenPos(position);
+          setShowExcalidrawGen(true);
+        }}
       />
 
       {/* SemanticSovereigntyPalette removed - functionality moved to SelectionToolbar */}
@@ -1435,6 +1492,28 @@ const Editor = ({ onChange, initialContent, editable, userId, documentId, onDocu
                 }, 100);
               }
             }
+          }
+        }}
+      />
+      <ExcalidrawGenerationModal
+        isOpen={showExcalidrawGen}
+        onClose={() => setShowExcalidrawGen(false)}
+        initialPrompt={excalidrawGenPrompt}
+        position={excalidrawGenPos}
+        onInsert={(elements) => {
+          if (editor) {
+            // Insert Excalidraw Block
+            const currentBlock = editor.getTextCursorPosition().block;
+            editor.insertBlocks(
+              [{
+                type: "excalidraw",
+                props: {
+                  data: JSON.stringify(elements)
+                }
+              }],
+              currentBlock,
+              "after"
+            );
           }
         }}
       />

@@ -17,7 +17,10 @@ interface AiChatModalProps {
   onClose: () => void;
   position?: { top: number; left: number };
   onInsertText?: (text: string) => void;
+  onInsertChart?: (chart: any, text?: string) => void;
+  autoSubmit?: boolean;
   initialInput?: string;
+  mode?: "chat" | "chart_gen";
 }
 
 export const AiChatModal = ({
@@ -26,6 +29,9 @@ export const AiChatModal = ({
   position,
   onInsertText,
   initialInput = "",
+  autoSubmit = false,
+  onInsertChart,
+  mode = "chat",
 }: AiChatModalProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -108,6 +114,35 @@ export const AiChatModal = ({
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  // Auto-submit logic
+  useEffect(() => {
+    if (isOpen && autoSubmit && initialInput && !isLoading && messages.length === 0 && input === initialInput) {
+      const formEvent = { preventDefault: () => { } } as React.FormEvent;
+      handleSubmit(formEvent);
+    }
+  }, [isOpen, autoSubmit, initialInput, isLoading, messages.length, input]);
+
+  // Auto-detect and insert chart in chart_gen mode
+  useEffect(() => {
+    if (mode === "chart_gen" && !isLoading && messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.role === "assistant" && lastMsg.content.includes("<chart_json>")) {
+        const chartMatch = lastMsg.content.match(/<chart_json>([\s\S]*?)<\/chart_json>/);
+        if (chartMatch && chartMatch[1] && onInsertChart) {
+          try {
+            console.log("[AiChatModal] Auto-inserting chart from stream completion");
+            const chart = JSON.parse(chartMatch[1]);
+            const cleanText = lastMsg.content.replace(/<chart_json>[\s\S]*?<\/chart_json>/g, "").trim();
+            onInsertChart(chart, cleanText);
+            onClose();
+          } catch (e) {
+            console.error("Failed to parse auto-generated chart", e);
+          }
+        }
+      }
+    }
+  }, [isLoading, messages, mode, onInsertChart, onClose]);
 
   const handleSubmit = useCallback(async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -303,7 +338,16 @@ export const AiChatModal = ({
                       <button
                         onClick={() => {
                           if (onInsertText) {
-                            onInsertText(message.content);
+                            // Find the corresponding user question (the message right before this one)
+                            const index = messages.findIndex(m => m.id === message.id);
+                            let contentToInsert = message.content;
+
+                            if (index > 0 && messages[index - 1].role === "user") {
+                              // Add question as H2 heading
+                              contentToInsert = `## ${messages[index - 1].content}\n\n${message.content}`;
+                            }
+
+                            onInsertText(contentToInsert);
                             onClose();
                           }
                         }}

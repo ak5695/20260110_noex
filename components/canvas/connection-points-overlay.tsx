@@ -197,13 +197,17 @@ export const ConnectionPointsOverlay = ({ excalidrawAPI, containerRef }: Connect
             let targetElement: any = null;
             let endBinding = null;
 
-            for (const el of elements) {
+            // Iterate in reverse to find the top-most element (highest z-index)
+            for (let i = elements.length - 1; i >= 0; i--) {
+                const el = elements[i];
                 if (el.isDeleted || el.id === sourceElementRef.current.id) continue;
                 if (["arrow", "line", "freedraw"].includes(el.type)) continue;
 
-                // Simple hit test
-                if (endPos.x >= el.x && endPos.x <= el.x + el.width &&
-                    endPos.y >= el.y && endPos.y <= el.y + el.height) {
+                // Hit test with buffer (magnetism)
+                const buffer = 20; // 20px tolerance
+                if (endPos.x >= el.x - buffer && endPos.x <= el.x + el.width + buffer &&
+                    endPos.y >= el.y - buffer && endPos.y <= el.y + el.height + buffer) {
+
                     targetElement = el;
                     endBinding = {
                         elementId: el.id,

@@ -11,14 +11,17 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Toolbar } from "@/components/toolbar";
 import { Cover } from "@/components/cover";
 import { Navbar } from "@/components/main/navbar";
-import { SelectionToolbar } from "@/components/selection-toolbar";
+
+import { AiChatModal } from "@/components/ai-chat-modal";
 import { DocumentOutline } from "@/components/document-outline";
+import { QaList } from "@/components/qa-list";
 
 import {
     useLayoutStore,
     useCanvasOpen,
     useCanvasFullscreen,
-    useOutlineOpen
+    useOutlineOpen,
+    useQaListOpen
 } from "@/store/use-layout-store";
 
 interface DocumentEditorLayoutProps {
@@ -32,6 +35,7 @@ export const DocumentEditorLayout = ({
     documentId,
     onChange
 }: DocumentEditorLayoutProps) => {
+
     // Helper to parse content optimistically
     const parseInitialContent = useMemo(() => {
         return (contentJson: string | null) => {
@@ -72,7 +76,21 @@ export const DocumentEditorLayout = ({
     const isCanvasOpen = useCanvasOpen();
     const isCanvasFullscreen = useCanvasFullscreen();
     const isOutlineOpen = useOutlineOpen();
-    const { toggleCanvas, toggleFullscreen, toggleOutline, openCanvas } = useLayoutStore();
+    const isQaListOpen = useQaListOpen();
+    const { toggleCanvas, toggleFullscreen, toggleOutline, toggleQaList, openCanvas } = useLayoutStore();
+
+    // Global AI Chat State
+    const [globalAiChat, setGlobalAiChat] = useState<{ isOpen: boolean, initialInput: string }>({
+        isOpen: false,
+        initialInput: ""
+    });
+
+    const handleQaAsk = (prompt: string) => {
+        setGlobalAiChat({
+            isOpen: true,
+            initialInput: prompt
+        });
+    };
 
     // Lazy Components
     const Editor = useMemo(
@@ -128,10 +146,10 @@ export const DocumentEditorLayout = ({
                             />
                         </div>
 
-                        {/* Relative Container for Content AND Outline (Below Navbar) */}
-                        <div className="flex-1 relative overflow-hidden">
-                            {/* Content Scroll Area */}
-                            <div className="h-full overflow-y-auto custom-scrollbar">
+                        {/* Flex Container for Content AND Sibilng Drawers (Push Layout) */}
+                        <div className="flex-1 flex flex-row overflow-hidden relative">
+                            {/* Content Scroll Area - Flex Grow */}
+                            <div className="flex-1 h-full overflow-y-auto custom-scrollbar min-w-0">
                                 <div className="pb-40">
                                     <Cover url={document.coverImage} />
                                     <div className="md:max-w-3xl lg:max-w-4xl mx-auto">
@@ -147,28 +165,64 @@ export const DocumentEditorLayout = ({
                                 </div>
                             </div>
 
-                            {/* Outline Drawer - Sliding from Right (Inside Relative Container) */}
+                            {/* Outline Sidebar - Flex Sibling */}
                             <div
                                 className={cn(
-                                    "absolute top-0 right-0 bottom-0 w-80 bg-background/80 backdrop-blur-xl border-l border-border/50 z-[60]",
-                                    "transition-transform duration-300 ease-in-out will-change-transform",
-                                    isOutlineOpen ? "translate-x-0" : "translate-x-full"
+                                    "h-full bg-background/80 backdrop-blur-xl border-l border-border/50 z-40 shrink-0",
+                                    "transition-[width] duration-300 ease-in-out overflow-hidden",
+                                    isOutlineOpen ? "w-80" : "w-0"
                                 )}
                             >
-                                <DocumentOutline
-                                    editorDocument={editorDocument}
-                                    className="h-full overflow-y-auto custom-scrollbar"
-                                    onClose={toggleOutline}
-                                />
+                                <div className="w-80 h-full">
+                                    <DocumentOutline
+                                        editorDocument={editorDocument}
+                                        className="h-full overflow-y-auto custom-scrollbar"
+                                        onClose={toggleOutline}
+                                    />
+                                </div>
                             </div>
 
-                            {/* Backdrop for closing */}
-                            {isOutlineOpen && (
-                                <div
-                                    className="absolute inset-0 z-[55] bg-transparent animate-in fade-in duration-300"
-                                    onClick={toggleOutline}
-                                />
-                            )}
+
+
+                            {/* Q&A Sidebar - Flex Sibling */}
+                            <div
+                                className={cn(
+                                    "h-full bg-background/80 backdrop-blur-xl border-l border-border/50 z-40 shrink-0",
+                                    "transition-[width] duration-300 ease-in-out overflow-hidden",
+                                    isQaListOpen ? "w-80" : "w-0"
+                                )}
+                            >
+                                <div className="w-80 h-full">
+                                    <QaList
+                                        onClose={toggleQaList}
+                                        onAsk={handleQaAsk}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Global AI Chat Modal */}
+                            <AiChatModal
+                                isOpen={globalAiChat.isOpen}
+                                onClose={() => setGlobalAiChat(prev => ({ ...prev, isOpen: false }))}
+                                initialInput={globalAiChat.initialInput}
+                                autoSubmit={true}
+                                onInsertText={(text) => {
+                                    // Just close for now, user can copy or we can try to insert if we have editor access
+                                    // Since we don't have direct access to editor instance here easily without prop drilling,
+                                    // we rely on the manual "Insert" button in the modal which calls this.
+                                    // However, the AiChatModal in Editor has access to editor instance.
+                                    // This global one is strictly for Q&A where usually they just want the answer.
+                                    // But user asked to "Insert answer with question summary".
+                                    // To support insertion, we need to pass a callback that Editor listens to?
+                                    // Or simply rely on copy-paste for this specific workflow?
+                                    // The user requirement said: "When user inserts answer, it brings a secondary heading".
+                                    // This logic resides in AiChatModal.
+                                    // If we use this global modal, we need to know WHERE to insert.
+                                    // WE CAN'T insert into BlockNote from here easily.
+                                    // WORKAROUND: Dispatch a custom event that Editor listens to.
+                                    window.dispatchEvent(new CustomEvent("editor:insert-text", { detail: text }));
+                                }}
+                            />
                         </div>
                     </div>
                 </Panel>
@@ -200,11 +254,6 @@ export const DocumentEditorLayout = ({
                 )}
 
             </Group>
-
-            <SelectionToolbar
-                documentId={documentId}
-                onEnsureCanvas={openCanvas}
-            />
         </div>
     );
 };

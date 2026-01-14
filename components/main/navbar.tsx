@@ -8,7 +8,7 @@ import { Menu } from "@/components/main/menu";
 import { Publish } from "@/components/main/publish";
 import useSWR from "swr";
 
-import { ChevronsLeft, ChevronsRight, MenuIcon, List } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, MenuIcon, List, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect } from "react";
 import { useSidebarStore, useSidebarCollapsed } from "@/store/use-sidebar-store";
@@ -69,14 +69,28 @@ export const Navbar = ({ initialData, isCanvasOpen, onToggleCanvas, isOutlineOpe
             <Publish initialData={document} />
             <Menu documentId={document.id} />
             {onToggleOutline && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onToggleOutline}
-                className={isOutlineOpen ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : ""}
-              >
-                <List className="h-4 w-4" />
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    import("@/store/use-layout-store").then(({ useLayoutStore }) => {
+                      useLayoutStore.getState().toggleQaList();
+                    });
+                  }}
+                  className="text-muted-foreground"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={onToggleOutline}
+                  className={isOutlineOpen ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : ""}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </>
             )}
             {onToggleCanvas && (
               <Button size="sm" variant="ghost" onClick={onToggleCanvas}>

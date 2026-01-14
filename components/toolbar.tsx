@@ -3,11 +3,17 @@
 import React, { ElementRef, useRef, useState, useCallback, useEffect } from "react";
 import { IconPicker } from "@/components/icon-picker";
 import { Button } from "@/components/ui/button";
-import { ImageIcon, Smile, X, Loader2 } from "lucide-react";
+import { ImageIcon, Smile, X, Loader2, Sparkles, Check } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 import { useCoverImage } from "@/hooks/use-cover-image";
 import { useDocumentStore, useDocumentTitle, useDocumentIcon } from "@/store/use-document-store";
 import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { toast } from "sonner";
 
 // Default placeholder text for new pages
 const PLACEHOLDER_TITLE = "Untitled";
@@ -21,6 +27,11 @@ export const Toolbar = ({ initialData, preview }: ToolbarProps) => {
   const inputRef = useRef<ElementRef<"textarea">>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving">("idle");
+
+  // AI Title Generation State
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedTitle, setGeneratedTitle] = useState("");
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   // Listen for write queue status updates
   useEffect(() => {
@@ -98,6 +109,66 @@ export const Toolbar = ({ initialData, preview }: ToolbarProps) => {
     updateIcon(initialData.id, null);
   }, [initialData.id, updateIcon]);
 
+  // AI Title Generation
+  const onGenerateTitle = async () => {
+    if (isGenerating) return;
+    setIsGenerating(true);
+    setGeneratedTitle("");
+
+    try {
+      // 1. Extract text from content
+      let textContent = "";
+      try {
+        if (initialData.content) {
+          const blocks = JSON.parse(initialData.content);
+          for (const block of blocks) {
+            if (block.content && Array.isArray(block.content)) {
+              for (const item of block.content) {
+                if (item.type === "text") {
+                  textContent += (item.text || "") + " ";
+                }
+              }
+            }
+            if (textContent.length > 1000) break; // Optimization
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse content for title generation", e);
+      }
+
+      const finalText = textContent.slice(0, 500).trim();
+
+      if (!finalText) {
+        toast.error("Document is empty. Write something first!");
+        setIsGenerating(false);
+        return;
+      }
+
+      // 2. Call API
+      const response = await fetch("/api/generate-title", {
+        method: "POST",
+        body: JSON.stringify({ content: finalText }),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate title");
+
+      const data = await response.json();
+      setGeneratedTitle(data.title);
+      setIsPopoverOpen(true);
+    } catch (error) {
+      toast.error("Failed to generate title");
+      console.error(error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const applyGeneratedTitle = () => {
+    onInput(generatedTitle);
+    setIsPopoverOpen(false);
+    toast.success("Title updated!");
+  };
+
   return (
     <div className="pl-[54px] group relative">
       {!!icon && !preview && (
@@ -152,6 +223,53 @@ export const Toolbar = ({ initialData, preview }: ToolbarProps) => {
           >
             <ImageIcon className="h-4 w-4 mr-2" /> Add cover
           </Button>
+        )}
+
+        {!preview && (
+          <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                className="text-muted-foreground text-xs"
+                variant="outline"
+                size="sm"
+                onClick={onGenerateTitle}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-2" />
+                )}
+                Generate title
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-3" align="start">
+              <div className="space-y-2">
+                <h4 className="font-medium text-xs text-muted-foreground uppercase tracking-wider">AI Suggestion</h4>
+                <div className="text-sm font-medium bg-muted/50 p-2 rounded-md border text-foreground">
+                  {generatedTitle}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setIsPopoverOpen(false)}
+                    className="h-8 text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={applyGeneratedTitle}
+                    className="h-8 text-xs bg-gradient-to-r from-indigo-500 to-purple-500 text-white border-0"
+                  >
+                    <Check className="h-3 w-3 mr-1.5" />
+                    Use this title
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
       {isEditing && !preview ? (

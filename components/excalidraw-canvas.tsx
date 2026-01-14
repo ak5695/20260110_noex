@@ -93,10 +93,27 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
                 isLoading: false,
                 // Add more stable defaults to prevent "undefined" drift in internal inputs
                 currentItemFontFamily: 1,
+                currentItemFontSize: 20,
+                currentItemTextAlign: "left",
+                currentItemStrokeSharpness: "sharp",
+                currentItemRoundness: "lg",
                 viewModeEnabled: false,
+                zenModeEnabled: false,
                 gridModeEnabled: false,
                 theme: resolvedTheme === "dark" ? "dark" : "light",
-                user: { name: "Collaborator" },
+                user: { name: "Collaborator", id: "user-1" },
+                // Explicitly define controlled properties to avoid "controlled to uncontrolled" error
+                zoom: { value: 1 },
+                scrollX: 0,
+                scrollY: 0,
+                currentItemOpacity: 100,
+                currentItemStrokeWidth: 1,
+                currentItemRoughness: 1,
+                currentItemStrokeStyle: "solid",
+                currentItemStartArrowhead: null,
+                currentItemEndArrowhead: null,
+                currentItemFillStyle: "hachure",
+                currentItemBackgroundColor: "transparent",
             },
             scrollToContent: true,
         };
@@ -180,15 +197,24 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
         const element = elements.find((el: any) => el.id === elementTarget.id);
 
         if (element) {
-            // Focus to element (keep current zoom)
-            // MUST pass array to scrollToContent
-            excalidrawAPI.scrollToContent([element], { fitToViewport: false, animate: true });
+            // 1. Set zoom first
             excalidrawAPI.updateScene({
                 appState: {
                     ...excalidrawAPI.getAppState(),
-                    selectedElementIds: { [elementTarget.id]: true }
+                    zoom: { value: 0.6 }
                 }
             });
+
+            // 2. Scroll to content after zoom is applied (small delay to ensure state update)
+            setTimeout(() => {
+                excalidrawAPI.scrollToContent([element], { fitToViewport: false, animate: true });
+                excalidrawAPI.updateScene({
+                    appState: {
+                        ...excalidrawAPI.getAppState(),
+                        selectedElementIds: { [elementTarget.id]: true }
+                    }
+                });
+            }, 100);
         }
 
         // Clear the target after navigation
@@ -380,6 +406,77 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
 
         window.addEventListener('binding:shown', handleBindingShown);
         return () => window.removeEventListener('binding:shown', handleBindingShown);
+    }, [excalidrawAPI]);
+
+    // 5. Handle AI Chart Insertion
+    useEffect(() => {
+        if (!excalidrawAPI) return;
+
+        const handleInsertAiChart = (e: CustomEvent) => {
+            const { chart } = e.detail;
+            if (!chart || !chart.elements) return;
+
+            console.log("[Canvas] Inserting AI Chart:", chart);
+
+            const currentElements = excalidrawAPI.getSceneElements();
+            const appState = excalidrawAPI.getAppState();
+
+            // Simple placement strategy: Place to the right of existing content plus padding
+            let maxX = -Infinity;
+            let minY = Infinity;
+
+            if (currentElements.length > 0) {
+                currentElements.forEach((el: any) => {
+                    if (el.x + el.width > maxX) maxX = el.x + el.width;
+                    if (el.y < minY) minY = el.y;
+                });
+            } else {
+                maxX = 0;
+                minY = 0;
+            }
+
+            const startX = maxX + 100; // 100px padding
+            const startY = minY !== Infinity ? minY : 0;
+
+            // Normalize chart elements to start at (0,0) then translate to (startX, startY)
+            // Calculate chart bounds
+            let chartMinX = Infinity;
+            let chartMinY = Infinity;
+            chart.elements.forEach((el: any) => {
+                if (el.x < chartMinX) chartMinX = el.x;
+                if (el.y < chartMinY) chartMinY = el.y;
+            });
+
+            // Translate
+            const newElements = chart.elements.map((el: any) => ({
+                ...el,
+                id: el.id || crypto.randomUUID(), // Ensure IDs
+                x: (el.x - chartMinX) + startX,
+                y: (el.y - chartMinY) + startY,
+                version: 1,
+                versionNonce: Math.floor(Math.random() * 1000000),
+            }));
+
+            // Update scene
+            excalidrawAPI.updateScene({
+                elements: [...currentElements, ...newElements],
+                appState: {
+                    ...appState,
+                    // Select the new elements
+                    selectedElementIds: newElements.reduce((acc: any, el: any) => {
+                        acc[el.id] = true;
+                        return acc;
+                    }, {})
+                }
+            });
+
+            // Zoom to fit
+            excalidrawAPI.scrollToContent(newElements, { fitToViewport: true, animate: true });
+            toast.success("AI Generated Chart Inserted");
+        };
+
+        window.addEventListener("insert-ai-chart", handleInsertAiChart as EventListener);
+        return () => window.removeEventListener("insert-ai-chart", handleInsertAiChart as EventListener);
     }, [excalidrawAPI]);
 
     // --- Cognitive Visibility: Native Links (No Overlay) ---
