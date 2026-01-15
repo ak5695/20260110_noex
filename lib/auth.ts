@@ -11,4 +11,29 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true
     },
+    databaseHooks: {
+        user: {
+            create: {
+                before: async (user) => {
+                    if (user.email !== "ji569514123@gmail.com") {
+                        return false; // Cancel operation
+                    }
+                    return { data: user };
+                },
+            },
+        },
+        session: {
+            create: {
+                before: async (session) => {
+                    const user = await db.query.user.findFirst({
+                        where: (table, { eq }) => eq(table.id, session.userId),
+                    });
+                    if (user?.email !== "ji569514123@gmail.com") {
+                        return false;
+                    }
+                    return { data: session };
+                },
+            },
+        },
+    },
 });
