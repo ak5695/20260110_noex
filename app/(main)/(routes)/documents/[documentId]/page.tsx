@@ -12,9 +12,15 @@ import { DocumentEditorLayout } from "@/components/document/document-editor-layo
 
 export default function DocumentIdPage() {
   const { documentId } = useParams();
-  const [document, setDocument] = useState<any>(null); // Start with null, not optimism
+  const [document, setDocument] = useState<any>(undefined); // Start with undefined (Loading Skeleton)
   const documentVersionRef = useRef<number>(0);
   const lastDocumentIdRef = useRef<string | null>(null);
+  const activeIdRef = useRef<string | string[] | null>(null);
+
+  // Sync active ID ref immediately
+  if (activeIdRef.current !== documentId) {
+    activeIdRef.current = documentId;
+  }
 
   // ⚡ Instant Document Loading - Cache-First Strategy
   // Goal: NEVER show loading skeleton when switching between cached documents
@@ -29,12 +35,19 @@ export default function DocumentIdPage() {
     let syncTimer: NodeJS.Timeout;
 
     const loadDocument = async () => {
+      // guard: verify we are still on the same document
+      if (activeIdRef.current !== documentId) return;
+
       // 【Step 1】立即检查 Zustand Store（同步，零延迟）
       const storeDoc = useDocumentStore.getState().documents.get(documentId);
-      if (storeDoc && isMounted) {
-        console.log("[DocumentPage] Instant from Zustand Store");
-        setDocument(storeDoc);
-        documentVersionRef.current = storeDoc.version || 0;
+      if (storeDoc && isMounted && activeIdRef.current === documentId) {
+        // Only use store doc if it has content (or if we accept partials)
+        // Check for content to avoid "empty" flash if sidebar only provided title
+        if (storeDoc.content) {
+          console.log("[DocumentPage] Instant from Zustand Store");
+          setDocument(storeDoc);
+          documentVersionRef.current = storeDoc.version || 0;
+        }
       }
 
       // 【Step 2】检查 IndexedDB 缓存（异步，<10ms）
@@ -42,9 +55,13 @@ export default function DocumentIdPage() {
       try {
         const { documentCache } = await import("@/lib/cache/document-cache");
         const cached = await documentCache.get(documentId, async () => null);
-        if (cached && isMounted) {
+
+        if (activeIdRef.current !== documentId || !isMounted) return;
+
+        if (cached) {
           // Only update if we don't have data yet or cache is newer
-          if (!document || cached.version > documentVersionRef.current) {
+          // Also useful if storeDoc was partial (no content) but cache is full
+          if (!document || !document.content || cached.version > documentVersionRef.current) {
             console.log("[DocumentPage] Instant from IndexedDB Cache");
             setDocument(cached);
             documentVersionRef.current = cached.version;
@@ -58,7 +75,7 @@ export default function DocumentIdPage() {
       // 【Step 3】后台从服务器同步（延迟 500ms 以避免频繁请求）
       // 如果用户在 500ms 内切换文档，请求将被取消
       syncTimer = setTimeout(async () => {
-        if (!isMounted) return;
+        if (!isMounted || activeIdRef.current !== documentId) return;
 
         try {
           // Use simpler check before heavy lifting
@@ -66,9 +83,11 @@ export default function DocumentIdPage() {
 
           const serverDoc = await getById(documentId);
 
-          if (serverDoc && isMounted) {
-            // Only update if server has newer version
-            if (serverDoc.version >= documentVersionRef.current) {
+          if (!isMounted || activeIdRef.current !== documentId) return;
+
+          if (serverDoc) {
+            // Only update if server has newer version or we are missing content
+            if (serverDoc.version >= documentVersionRef.current || !document?.content) {
               setDocument(serverDoc);
               documentVersionRef.current = serverDoc.version;
 
@@ -78,14 +97,15 @@ export default function DocumentIdPage() {
 
               console.log("[DocumentPage] Synced from server, version:", serverDoc.version);
             }
-          } else if (!document && isMounted) {
-            // Document not found and we have no cached version
+          } else if (document === undefined && isMounted) {
+            // Document not found (and currently showing skeleton) -> switch to Not Found
+            // Only if we truly have nothing
             setDocument(null);
           }
         } catch (err) {
           console.error("[DocumentPage] Server fetch error:", err);
           // Keep showing cached data if available
-          if (!document && isMounted) {
+          if (document === undefined && isMounted) {
             setDocument(null);
           }
         }
