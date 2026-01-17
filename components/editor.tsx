@@ -23,6 +23,7 @@ import { useNavigationStore, useBlockTarget } from "@/store/use-navigation-store
 import { AiChatModal } from "./ai-chat-modal";
 import { useBindingSync } from "@/hooks/use-binding-sync";
 import { ExcalidrawGenerationModal } from "./excalidraw-generation-modal";
+import { useLayoutStore } from "@/store/use-layout-store";
 import { FormattingToolbarController, SuggestionMenuController, getDefaultReactSlashMenuItems } from "@blocknote/react";
 import { filterSuggestionItems } from "@blocknote/core/extensions";
 import { schema } from "./editor/config/schema";
@@ -34,10 +35,9 @@ interface EditorProps {
   editable?: boolean;
   userId?: string;
   documentId: string;
-  onDocumentChange?: (document: any) => void; // Expose document for outline
 }
 
-const EditorComponent = ({ onChange, initialContent, editable, userId, documentId, onDocumentChange }: EditorProps) => {
+const EditorComponent = ({ onChange, initialContent, editable, userId, documentId }: EditorProps) => {
   const { resolvedTheme } = useTheme();
   const [activeSelection, setActiveSelection] = useState("");
   const [existingAnchor, setExistingAnchor] = useState<any>(null);
@@ -55,6 +55,50 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
   const [excalidrawGenPos, setExcalidrawGenPos] = useState({ top: 0, left: 0 });
 
   const router = useRouter();
+
+  // CRITICAL FIX: Unified Focus Management System
+  // Track pending focus operations to prevent racing setTimeout calls
+  const pendingFocusRef = useRef<number | null>(null);
+
+  const requestEditorFocus = useCallback((editor: any, options?: {
+    delay?: number,
+    blockId?: string,
+    position?: "start" | "end"
+  }) => {
+    // Cancel any pending focus request
+    if (pendingFocusRef.current) {
+      clearTimeout(pendingFocusRef.current);
+      pendingFocusRef.current = null;
+    }
+
+    const { delay = 0, blockId, position = "end" } = options || {};
+
+    const performFocus = () => {
+      if (!editor) return;
+
+      try {
+        editor.focus();
+
+        if (blockId) {
+          const block = editor.getBlock(blockId);
+          if (block) {
+            editor.setTextCursorPosition(block, position);
+          }
+        }
+      } catch (e) {
+        console.error("[FocusManager] Failed to restore focus:", e);
+      }
+
+      pendingFocusRef.current = null;
+    };
+
+    if (delay > 0) {
+      pendingFocusRef.current = window.setTimeout(performFocus, delay);
+    } else {
+      // Use requestAnimationFrame for immediate (but deferred) focus
+      requestAnimationFrame(performFocus);
+    }
+  }, []);
 
   // DEBUG: Monitor focus loss events
   useEffect(() => {
@@ -164,17 +208,8 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
 
           if (wasFocused && isRecent) {
             console.log("[Editor] Focus Recovery: Restoring focus/cursor from SessionStorage");
-
-            // Execute restoration
-            setTimeout(() => {
-              editor.focus();
-              if (blockId) {
-                const block = editor.getBlock(blockId);
-                if (block) {
-                  editor.setTextCursorPosition(block, "end");
-                }
-              }
-            }, 100);
+            // Use unified focus manager
+            requestEditorFocus(editor, { delay: 100, blockId, position: "end" });
           }
         } catch (e) { console.error(e); }
       }
@@ -205,7 +240,7 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
     const domElement = document.querySelector(".bn-editor");
     if (domElement) {
       const onFocus = (e: FocusEvent) => {
-        console.log(`[EditorMonitor-${editor._instanceId}] Editor Focused`, {
+        console.log(`[EditorMonitor-${(editor as any)._instanceId}] Editor Focused`, {
           target: (e.target as HTMLElement).tagName,
           relatedTarget: (e.relatedTarget as HTMLElement)?.tagName
         });
@@ -218,7 +253,7 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
       };
 
       const onBlur = (e: FocusEvent) => {
-        console.log(`[EditorMonitor-${editor._instanceId}] Editor Blurred`, {
+        console.log(`[EditorMonitor-${(editor as any)._instanceId}] Editor Blurred`, {
           target: (e.target as HTMLElement).tagName,
           relatedTarget: (e.relatedTarget as HTMLElement)?.tagName,
           newActiveElement: document.activeElement?.tagName
@@ -226,29 +261,31 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
       };
 
       const onMouseDown = (e: MouseEvent) => {
-        console.log(`[EditorMonitor-${editor._instanceId}] Mouse Down`, {
+        console.log(`[EditorMonitor-${(editor as any)._instanceId}] Mouse Down`, {
           target: (e.target as HTMLElement).tagName,
           blockId: (e.target as HTMLElement).closest('[data-id]')?.getAttribute('data-id')
         });
       };
 
       const onInput = (e: Event) => {
-        console.log(`[EditorMonitor-${editor._instanceId}] Input Event`, {
+        console.log(`[EditorMonitor-${(editor as any)._instanceId}] Input Event`, {
           type: e.type,
           // text: (e as any).data
         });
       };
 
-      domElement.addEventListener("focus", onFocus as any, true);
-      domElement.addEventListener("blur", onBlur as any, true); // capture
-      domElement.addEventListener("mousedown", onMouseDown as any, true);
-      domElement.addEventListener("input", onInput as any, true);
+      // CRITICAL FIX: Use bubble phase (false) instead of capture phase (true)
+      // This allows BlockNote's internal handlers to run first before our logging
+      domElement.addEventListener("focus", onFocus as any, false);
+      domElement.addEventListener("blur", onBlur as any, false);
+      domElement.addEventListener("mousedown", onMouseDown as any, false);
+      domElement.addEventListener("input", onInput as any, false);
 
       cleanups.push(() => {
-        domElement.removeEventListener("focus", onFocus as any, true);
-        domElement.removeEventListener("blur", onBlur as any, true);
-        domElement.removeEventListener("mousedown", onMouseDown as any, true);
-        domElement.removeEventListener("input", onInput as any, true);
+        domElement.removeEventListener("focus", onFocus as any, false);
+        domElement.removeEventListener("blur", onBlur as any, false);
+        domElement.removeEventListener("mousedown", onMouseDown as any, false);
+        domElement.removeEventListener("input", onInput as any, false);
       });
     }
 
@@ -304,7 +341,8 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
 
     const editorElement = document.querySelector(".bn-container");
     if (editorElement) {
-      editorElement.addEventListener("keydown", handleKeyDown as any, true);
+      // CRITICAL FIX: Use bubble phase to let BlockNote handle keys first
+      editorElement.addEventListener("keydown", handleKeyDown as any, false);
     }
 
     // Listen for external insert events (e.g. from Q&A List Global Chat)
@@ -337,7 +375,7 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
 
     return () => {
       if (editorElement) {
-        editorElement.removeEventListener("keydown", handleKeyDown as any, true);
+        editorElement.removeEventListener("keydown", handleKeyDown as any, false);
       }
       window.removeEventListener("editor:insert-text", handleInsertText as unknown as EventListener);
     };
@@ -487,20 +525,16 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
   const handleCloseAiModal = useCallback(() => {
     setShowAiModal(false);
 
-    // Restore focus to editor and cursor position
-    setTimeout(() => {
-      if (editor && savedCursorBlockRef.current) {
-        const block = editor.getBlock(savedCursorBlockRef.current);
-        if (block) {
-          editor.focus();
-          editor.setTextCursorPosition(block, "end");
-        }
-        savedCursorBlockRef.current = null;
-      } else if (editor) {
-        editor.focus();
-      }
-    }, 50);
-  }, [editor]);
+    // Restore focus to editor and cursor position using unified focus manager
+    if (editor) {
+      requestEditorFocus(editor, {
+        delay: 50,
+        blockId: savedCursorBlockRef.current || undefined,
+        position: "end"
+      });
+      savedCursorBlockRef.current = null;
+    }
+  }, [editor, requestEditorFocus]);
 
   // 注入上下文到 editor 实例，以便自定义 Block 访问
   useEffect(() => {
@@ -624,9 +658,9 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
         }
       }
     };
-    // Use capture phase to ensure we intercept before editor internal selection logic
-    window.addEventListener('click', handleClick, true);
-    return () => window.removeEventListener('click', handleClick, true);
+    // CRITICAL FIX: Use bubble phase instead of capture to not interfere with BlockNote selection
+    window.addEventListener('click', handleClick, false);
+    return () => window.removeEventListener('click', handleClick, false);
   }, [jumpToElement]);
 
   // Sync Deleted State from DB Bindings
@@ -737,70 +771,7 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
     return () => document.removeEventListener("mousedown", clearActive);
   }, []);
 
-  // 5. Block Decoration Logic (Surgical Updates - Enterprise Grade)
-  const decorateBlocks = useCallback(() => {
-    if (!bindings.length) return;
 
-    // A: Clear stale indicators (blocks that are no longer in the bindings list)
-    const activeBlockIds = new Set(bindings.map(b => b.blockId));
-    document.querySelectorAll(".is-linked").forEach(el => {
-      const id = el.getAttribute("data-id");
-      if (!id || !activeBlockIds.has(id)) {
-        el.classList.remove("is-linked");
-        el.querySelector(".link-indicator")?.remove();
-        el.querySelector(".binding-tag")?.remove();
-      }
-    });
-
-    // B: Surgical Injection (Add only what's missing)
-    bindings.forEach(binding => {
-      if (!binding.blockId) return;
-
-      // Try to find the element - handling BlockNote structure
-      const element = document.querySelector(`[data-id="${binding.blockId}"]`);
-
-      // Ensure we are targeting the content wrapper for styling
-      if (element) {
-        // Add class for CSS-based border and background
-        if (!element.classList.contains("is-linked")) {
-          element.classList.add("is-linked");
-        }
-
-        // Add a small indicator if doesn't exist
-        const existingIndicator = element.querySelector(`.link-indicator[data-target="${binding.elementId}"]`);
-
-        if (!existingIndicator) {
-          const indicator = document.createElement("div");
-          indicator.className = "link-indicator absolute -left-6 top-1.5 w-5 h-5 flex items-center justify-center text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded bg-white dark:bg-[#1f1f1f] shadow-sm border border-orange-200 dark:border-orange-900 cursor-pointer transition-all z-20 group/indicator";
-          indicator.setAttribute("data-target", binding.elementId);
-          // Use Link2 icon
-          indicator.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link-2"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`;
-          indicator.title = "Jump to Canvas Element";
-
-          indicator.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            // Use Zustand store to navigate to canvas element
-            jumpToElement(binding.elementId);
-          };
-
-          // Ensure relative positioning
-          if ((element as HTMLElement).style.position !== "relative") {
-            (element as HTMLElement).style.position = "relative";
-          }
-          element.appendChild(indicator);
-        }
-
-        // Add Binding Tag (Cognitive Visibility - Top Right)
-        if (!element.querySelector(".binding-tag")) {
-          const tag = document.createElement("div");
-          tag.className = "binding-tag";
-          tag.textContent = "LINKED";
-          element.appendChild(tag);
-        }
-      }
-    });
-  }, [bindings, jumpToElement]);
 
   // 6. Global delegated click listener for linked blocks
   useEffect(() => {
@@ -914,15 +885,11 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
 
     onChange(content);
 
-    // Expose document for outline
-    /*
-    if (onDocumentChange) {
-      onDocumentChange(editor.document);
-    }
-    */
-
     // Real-time Content Sync to Canvas (Enterprise Feature)
     try {
+      // Publish structure to Layout Store for Outline
+      useLayoutStore.getState().setEditorDocument(editor.document);
+
       const cursor = editor.getTextCursorPosition();
       if (cursor.block) {
         const block = cursor.block;
@@ -1043,21 +1010,23 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
 
                 // Move cursor to the end of the last inserted block
                 // We find it by traversing nextBlock from targetBlock
-                setTimeout(() => {
-                  let lastInsertedBlock = targetBlock;
-                  for (let i = 0; i < blocks.length; i++) {
-                    const next = editor.getNextBlock(lastInsertedBlock);
-                    if (next) {
-                      lastInsertedBlock = next;
-                    } else {
-                      break;
-                    }
+                let lastInsertedBlock = targetBlock;
+                for (let i = 0; i < blocks.length; i++) {
+                  const next = editor.getNextBlock(lastInsertedBlock);
+                  if (next) {
+                    lastInsertedBlock = next;
+                  } else {
+                    break;
                   }
+                }
 
-                  if (lastInsertedBlock !== targetBlock) {
-                    editor.setTextCursorPosition(lastInsertedBlock, "end");
-                  }
-                }, 100);
+                if (lastInsertedBlock !== targetBlock) {
+                  requestEditorFocus(editor, {
+                    delay: 100,
+                    blockId: lastInsertedBlock.id,
+                    position: "end"
+                  });
+                }
               } catch (error) {
                 console.error("Failed to parse markdown to blocks:", error);
                 // Fallback to simple paragraph insertion if parsing fails
@@ -1107,9 +1076,10 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
 
 // Export Memoized Component to prevent re-renders from Parent Layout updates
 export const Editor = memo(EditorComponent, (prev, next) => {
-  // CRITICAL: Only re-render if documentId changes. 
-  // Ignore content/user/onChange updates to prevent focus loss during typing.
-  return prev.documentId === next.documentId && prev.userId === next.userId;
+  // CRITICAL FIX: Only re-render if documentId changes (navigation to different document)
+  // Ignore ALL other props (onChange, initialContent, userId, editable) to prevent focus loss
+  // The editor manages its own content state via useCreateBlockNote and onChange callbacks
+  return prev.documentId === next.documentId;
 });
 
 export default Editor;

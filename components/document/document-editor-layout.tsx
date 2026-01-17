@@ -1,9 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, memo } from "react";
-// import dynamic from "next/dynamic"; // Removed dynamic import
-// import { Loader2 } from "lucide-react"; // Removed loader
-import debounce from "lodash.debounce";
+import { useState, memo } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { cn } from "@/lib/utils";
 
@@ -39,20 +36,6 @@ const DocumentEditorLayoutComponent = ({
     documentId,
     onChange
 }: DocumentEditorLayoutProps) => {
-
-    const setStoreEditorDocument = useLayoutStore((state) => state.setEditorDocument);
-
-    // Debounce outline updates to Zustand Store (avoids Layout re-render)
-    const debouncedSetEditorDocument = useMemo(
-        () => debounce((doc: any) => setStoreEditorDocument(doc), 1000),
-        [setStoreEditorDocument]
-    );
-
-    useEffect(() => {
-        return () => {
-            debouncedSetEditorDocument.cancel();
-        };
-    }, [debouncedSetEditorDocument]);
 
     // Layout Store
     const isCanvasOpen = useCanvasOpen();
@@ -116,7 +99,6 @@ const DocumentEditorLayoutComponent = ({
                                             initialContent={document.content}
                                             userId={document.userId}
                                             documentId={documentId}
-                                            onDocumentChange={debouncedSetEditorDocument}
                                         />
                                     </div>
                                 </div>

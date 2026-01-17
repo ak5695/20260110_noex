@@ -97,7 +97,13 @@ export default function DocumentIdPage() {
             // Only update if server has newer version, OR if we are missing content (e.g. loaded from partial list)
             // CRITICAL: We use '>' instead of '>=' to avoid re-rendering if version is identical.
             // This prevents "early focus loss" caused by redundant hydration of same data.
-            if (serverDoc.version > documentVersionRef.current || !document?.content) {
+
+            // PHASE 4 FIX: Version Control - Write-in-progress flag
+            const isWriting = Date.now() - lastInputTimeRef.current < 2000;
+
+            if (isWriting && document?.content) {
+              console.log("[DocumentPage] Skipping server update due to active typing");
+            } else if (serverDoc.version > documentVersionRef.current || !document?.content) {
 
               // Double check content deep equality if version is strictly greater but we want to be extra safe?
               // No, version should be the source of truth.
@@ -150,7 +156,11 @@ export default function DocumentIdPage() {
   }, [documentId]);
 
   // Enterprise-grade onChange with write queue
+  const lastInputTimeRef = useRef<number>(0);
+
   const onChange = useCallback(async (content: string) => {
+    lastInputTimeRef.current = Date.now();
+
     if (typeof documentId === "string" && document?.userId) {
       try {
         await writeQueue.queueUpdate({
