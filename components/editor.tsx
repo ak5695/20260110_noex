@@ -253,9 +253,18 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
       };
 
       const onBlur = (e: FocusEvent) => {
+        const related = e.relatedTarget as HTMLElement;
         console.log(`[EditorMonitor-${(editor as any)._instanceId}] Editor Blurred`, {
           target: (e.target as HTMLElement).tagName,
-          relatedTarget: (e.relatedTarget as HTMLElement)?.tagName,
+          relatedTarget: related?.tagName,
+          relatedDetails: related ? {
+            id: related.id,
+            className: related.className,
+            type: (related as HTMLInputElement).type,
+            name: (related as HTMLInputElement).name,
+            placeholder: (related as HTMLInputElement).placeholder,
+            outerHTML: related.outerHTML.slice(0, 100) // First 100 chars
+          } : null,
           newActiveElement: document.activeElement?.tagName
         });
       };
