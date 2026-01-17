@@ -239,63 +239,7 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
     // Track via DOM events
     const domElement = document.querySelector(".bn-editor");
     if (domElement) {
-      const onFocus = (e: FocusEvent) => {
-        console.log(`[EditorMonitor-${(editor as any)._instanceId}] Editor Focused`, {
-          target: (e.target as HTMLElement).tagName,
-          relatedTarget: (e.relatedTarget as HTMLElement)?.tagName
-        });
-
-        // Fallback tracking
-        sessionStorage.setItem(`JOTION_FOCUS_${documentId}`, JSON.stringify({
-          timestamp: Date.now(),
-          wasFocused: true
-        }));
-      };
-
-      const onBlur = (e: FocusEvent) => {
-        const related = e.relatedTarget as HTMLElement;
-        console.log(`[EditorMonitor-${(editor as any)._instanceId}] Editor Blurred`, {
-          target: (e.target as HTMLElement).tagName,
-          relatedTarget: related?.tagName,
-          relatedDetails: related ? {
-            id: related.id,
-            className: related.className,
-            type: (related as HTMLInputElement).type,
-            name: (related as HTMLInputElement).name,
-            placeholder: (related as HTMLInputElement).placeholder,
-            outerHTML: related.outerHTML.slice(0, 100) // First 100 chars
-          } : null,
-          newActiveElement: document.activeElement?.tagName
-        });
-      };
-
-      const onMouseDown = (e: MouseEvent) => {
-        console.log(`[EditorMonitor-${(editor as any)._instanceId}] Mouse Down`, {
-          target: (e.target as HTMLElement).tagName,
-          blockId: (e.target as HTMLElement).closest('[data-id]')?.getAttribute('data-id')
-        });
-      };
-
-      const onInput = (e: Event) => {
-        console.log(`[EditorMonitor-${(editor as any)._instanceId}] Input Event`, {
-          type: e.type,
-          // text: (e as any).data
-        });
-      };
-
-      // CRITICAL FIX: Use bubble phase (false) instead of capture phase (true)
-      // This allows BlockNote's internal handlers to run first before our logging
-      domElement.addEventListener("focus", onFocus as any, false);
-      domElement.addEventListener("blur", onBlur as any, false);
-      domElement.addEventListener("mousedown", onMouseDown as any, false);
-      domElement.addEventListener("input", onInput as any, false);
-
-      cleanups.push(() => {
-        domElement.removeEventListener("focus", onFocus as any, false);
-        domElement.removeEventListener("blur", onBlur as any, false);
-        domElement.removeEventListener("mousedown", onMouseDown as any, false);
-        domElement.removeEventListener("input", onInput as any, false);
-      });
+      // Debug monitors removed for production stability
     }
 
     return () => {
