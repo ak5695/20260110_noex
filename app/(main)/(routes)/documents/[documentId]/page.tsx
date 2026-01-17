@@ -47,15 +47,18 @@ export default function DocumentIdPage() {
       if (activeIdRef.current !== documentId) return;
 
       // 【Step 1】立即检查 Zustand Store（同步，零延迟）
-      // 使用 useLayoutEffect 确保在绘制前获取数据
+      // For optimistic updates (e.g., new document creation), use store data immediately
       const storeDoc = useDocumentStore.getState().documents.get(documentId);
       if (storeDoc && activeIdRef.current === documentId) {
+        // Accept even empty content for new documents (instant switch)
+        setDocument(storeDoc);
+        documentVersionRef.current = storeDoc.version || 0;
+
+        // If we have full content, skip cache/server fetch
         if (storeDoc.content) {
-          // Sync immediately if we have it
-          setDocument(storeDoc);
-          documentVersionRef.current = storeDoc.version || 0;
-          return; // Skip other steps if we have authoritative data
+          return;
         }
+        // Otherwise continue to background fetch but UI is already showing
       }
 
       // 【Step 2】检查 IndexedDB 缓存（异步，<10ms）

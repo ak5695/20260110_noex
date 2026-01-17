@@ -298,8 +298,8 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
 
     const editorElement = document.querySelector(".bn-container");
     if (editorElement) {
-      // CRITICAL FIX: Use bubble phase to let BlockNote handle keys first
-      editorElement.addEventListener("keydown", handleKeyDown as any, false);
+      // Use CAPTURE phase to intercept BEFORE BlockNote handles the key
+      editorElement.addEventListener("keydown", handleKeyDown as any, true);
     }
 
     // Listen for external insert events (e.g. from Q&A List Global Chat)
@@ -332,7 +332,7 @@ const EditorComponent = ({ onChange, initialContent, editable, userId, documentI
 
     return () => {
       if (editorElement) {
-        editorElement.removeEventListener("keydown", handleKeyDown as any, false);
+        editorElement.removeEventListener("keydown", handleKeyDown as any, true);
       }
       window.removeEventListener("editor:insert-text", handleInsertText as unknown as EventListener);
     };

@@ -18,7 +18,28 @@ import { useCanvasSync } from "@/hooks/use-canvas-sync";
 import { CanvasStatusIndicator } from "@/components/canvas/canvas-status-indicator";
 
 const Excalidraw = dynamic(
-    () => import("@excalidraw/excalidraw").then((mod) => mod.Excalidraw),
+    async () => {
+        const { Excalidraw, MainMenu, WelcomeScreen } = await import("@excalidraw/excalidraw");
+
+        const ExcalidrawWrapper = (props: any) => {
+            return (
+                <Excalidraw {...props}>
+                    <MainMenu>
+                        <MainMenu.DefaultItems.LoadScene />
+                        <MainMenu.DefaultItems.SaveToActiveFile />
+                        <MainMenu.DefaultItems.Export />
+                        <MainMenu.DefaultItems.SaveAsImage />
+                        <MainMenu.DefaultItems.Help />
+                        <MainMenu.DefaultItems.ClearCanvas />
+                        <MainMenu.Separator />
+                        <MainMenu.DefaultItems.ToggleTheme />
+                        <MainMenu.DefaultItems.ChangeCanvasBackground />
+                    </MainMenu>
+                </Excalidraw>
+            );
+        };
+        return ExcalidrawWrapper;
+    },
     {
         ssr: false,
         loading: () => (
@@ -82,20 +103,18 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
         // If we already captured the initial data for this mount session, return it
         if (initialDataRef.current) return initialDataRef.current;
 
-        // Capture initial state
+        // Capture initial state - let Excalidraw handle ALL colors via theme prop
         const data = {
             elements: initialElements || [],
             appState: {
-                viewBackgroundColor: resolvedTheme === "dark" ? "#121212" : "#ffffff",
-                currentItemStrokeColor: resolvedTheme === "dark" ? "#ffffff" : "#000000",
+                // Let Excalidraw's theme handle ALL colors (background, stroke, etc.)
                 name: "Rhizo Workspace",
                 collaborators: new Map(),
                 isLoading: false,
-                // Add more stable defaults to prevent "undefined" drift in internal inputs
                 currentItemFontFamily: 1,
                 currentItemFontSize: 20,
                 currentItemTextAlign: "left",
-                currentItemStrokeSharpness: "sharp",
+                currentItemStrokeSharpness: "round",
                 currentItemRoundness: "lg",
                 viewModeEnabled: false,
                 zenModeEnabled: false,
@@ -113,7 +132,6 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
                 currentItemStartArrowhead: null,
                 currentItemEndArrowhead: null,
                 currentItemFillStyle: "hachure",
-                currentItemBackgroundColor: "transparent",
             },
             scrollToContent: true,
         };
@@ -122,6 +140,25 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
         console.log("[Canvas] initialData stabilized for documentId:", documentId);
         return data;
     }, [isLoaded, canvasId, initialElements, resolvedTheme, documentId]);
+
+    // Sync theme changes - only update theme, let Excalidraw handle background colors
+    useEffect(() => {
+        if (!excalidrawAPI || !resolvedTheme) return;
+
+        const currentTheme = excalidrawAPI.getAppState().theme;
+        const newTheme = resolvedTheme === "dark" ? "dark" : "light";
+
+        // Only update if theme is different
+        if (currentTheme !== newTheme) {
+            excalidrawAPI.updateScene({
+                appState: {
+                    ...excalidrawAPI.getAppState(),
+                    theme: newTheme,
+                }
+            });
+            console.log("[Canvas] Theme synced to:", newTheme);
+        }
+    }, [resolvedTheme, excalidrawAPI]);
 
     const [isDragOver, setIsDragOver] = useState(false);
     const [bindings, setBindings] = useState<any[]>([]);

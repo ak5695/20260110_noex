@@ -49,20 +49,20 @@ export const QaList = ({ onClose, className, onAsk }: QaListProps) => {
     };
 
     return (
-        <div className={cn("flex flex-col h-full bg-background border-l border-border", className)}>
-            <div className="flex items-center justify-between p-4 border-b border-border">
+        <div className={cn("flex flex-col h-full bg-background dark:bg-[#1F1F1F] border-l border-border", className)}>
+            <div className="flex items-center justify-between p-4 border-b border-border/50">
                 <div className="flex items-center gap-2">
-                    <HelpCircle className="w-5 h-5 text-orange-500" />
+                    <HelpCircle className="w-5 h-5 text-muted-foreground" />
                     <h3 className="font-semibold text-foreground">Q&A Checklist</h3>
                 </div>
-                <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
+                <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 text-muted-foreground hover:text-foreground">
                     <X className="w-4 h-4" />
                 </Button>
             </div>
 
             <Tabs defaultValue="unasked" className="flex-1 flex flex-col overflow-hidden">
                 <div className="px-4 pt-4">
-                    <TabsList className="w-full grid grid-cols-2">
+                    <TabsList className="w-full grid grid-cols-2 bg-secondary dark:bg-neutral-800">
                         <TabsTrigger value="unasked">To Ask ({unaskedItems.length})</TabsTrigger>
                         <TabsTrigger value="asked">Completed ({askedItems.length})</TabsTrigger>
                     </TabsList>
@@ -73,15 +73,14 @@ export const QaList = ({ onClose, className, onAsk }: QaListProps) => {
                     <div className="px-4 py-2">
                         <div className="relative">
                             <input
-                                placeholder="Edit question..."
+                                placeholder="Add a question..."
                                 ref={(input) => {
                                     if (input) {
-                                        // Move cursor to end
                                         input.setSelectionRange(input.value.length, input.value.length);
                                         input.focus();
                                     }
                                 }}
-                                className="w-full text-xs pl-3 pr-8 py-2 bg-muted/50 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all"
+                                className="w-full text-xs pl-3 pr-8 py-2 bg-secondary/50 dark:bg-neutral-800 border border-transparent rounded-md focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-muted-foreground"
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter") {
                                         const val = (e.target as HTMLInputElement).value.trim();
@@ -103,12 +102,12 @@ export const QaList = ({ onClose, className, onAsk }: QaListProps) => {
                     <ScrollArea className="flex-1 px-4 pb-4">
                         {unaskedItems.length === 0 ? (
                             <div className="text-center text-muted-foreground py-8 text-sm">
-                                No questions pending. <br /> Select text and click "Ask Later" to add here.
+                                No questions pending.
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 {unaskedItems.map((item) => (
-                                    <div key={item.id} className="bg-muted/30 rounded-lg p-3 border border-border/50 group hover:border-orange-500/30 transition-all">
+                                    <div key={item.id} className="bg-secondary/30 dark:bg-neutral-800/40 rounded-lg p-3 border border-transparent hover:border-border/50 transition-all group">
                                         <p className="text-sm font-medium line-clamp-3 mb-2 text-foreground/90">
                                             "{item.text}"
                                         </p>
@@ -118,8 +117,8 @@ export const QaList = ({ onClose, className, onAsk }: QaListProps) => {
                                                     <Button
                                                         key={type}
                                                         size="sm"
-                                                        variant="outline"
-                                                        className="h-6 text-[10px] px-2 capitalize hover:text-orange-600 hover:border-orange-300 bg-background"
+                                                        variant="ghost"
+                                                        className="h-6 text-[10px] px-2 capitalize bg-secondary/50 dark:bg-neutral-700/50 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-muted-foreground hover:text-foreground"
                                                         onClick={() => handleAsk(item, type)}
                                                     >
                                                         {type === "what" ? "什么是" : type === "why" ? "为什么" : "怎么办"}?
@@ -127,8 +126,8 @@ export const QaList = ({ onClose, className, onAsk }: QaListProps) => {
                                                 ))}
                                                 <Button
                                                     size="sm"
-                                                    variant="outline"
-                                                    className="h-6 text-[10px] px-2 capitalize hover:text-orange-600 hover:border-orange-300 bg-background"
+                                                    variant="ghost"
+                                                    className="h-6 text-[10px] px-2 capitalize bg-secondary/50 dark:bg-neutral-700/50 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-muted-foreground hover:text-foreground"
                                                     onClick={() => {
                                                         handleAsk(item, "custom");
                                                     }}
@@ -136,11 +135,11 @@ export const QaList = ({ onClose, className, onAsk }: QaListProps) => {
                                                     直接问
                                                 </Button>
                                             </div>
-                                            <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                                    className="h-6 w-6 text-muted-foreground hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-sm"
                                                     onClick={() => removeItem(item.id)}
                                                     title="Delete"
                                                 >
@@ -148,6 +147,7 @@ export const QaList = ({ onClose, className, onAsk }: QaListProps) => {
                                                 </Button>
                                             </div>
                                         </div>
+
                                         <p className="text-[10px] text-muted-foreground mt-2 text-right">
                                             Added {formatDistanceToNow(item.createdAt)} ago
                                         </p>

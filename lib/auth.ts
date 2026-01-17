@@ -11,29 +11,19 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true
     },
-    databaseHooks: {
-        user: {
-            create: {
-                before: async (user) => {
-                    if (user.email !== "ji569514123@gmail.com") {
-                        return false; // Cancel operation
-                    }
-                    return { data: user };
-                },
-            },
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID as string,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
         },
-        session: {
-            create: {
-                before: async (session) => {
-                    const user = await db.query.user.findFirst({
-                        where: (table, { eq }) => eq(table.id, session.userId),
-                    });
-                    if (user?.email !== "ji569514123@gmail.com") {
-                        return false;
-                    }
-                    return { data: session };
-                },
-            },
+        github: {
+            clientId: process.env.GITHUB_CLIENT_ID as string,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
         },
     },
+    trustedOrigins: [
+        process.env.BETTER_AUTH_URL || "http://localhost:3000",
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    ],
 });
+

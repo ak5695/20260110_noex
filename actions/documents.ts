@@ -321,7 +321,12 @@ export const remove = async (id: string) => {
 
 export const getSearch = async () => {
     const user = await getUser()
-    if (!user) return []
+    if (!user) {
+        console.warn("[getSearch] Unauthenticated request");
+        return []
+    }
+
+    console.log("[getSearch] Fetching for user:", user.id);
 
     const data = await db.select().from(documents)
         .where(

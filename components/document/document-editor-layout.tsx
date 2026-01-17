@@ -107,7 +107,7 @@ const DocumentEditorLayoutComponent = ({
                             {/* Outline Sidebar - Flex Sibling */}
                             <div
                                 className={cn(
-                                    "h-full bg-background/80 backdrop-blur-xl border-l border-border/50 z-40 shrink-0",
+                                    "h-full bg-background dark:bg-[#1F1F1F] border-l border-border/50 z-40 shrink-0",
                                     "transition-[width] duration-300 ease-in-out overflow-hidden",
                                     isOutlineOpen ? "w-80" : "w-0"
                                 )}
@@ -125,7 +125,7 @@ const DocumentEditorLayoutComponent = ({
                             {/* Q&A Sidebar - Flex Sibling */}
                             <div
                                 className={cn(
-                                    "h-full bg-background/80 backdrop-blur-xl border-l border-border/50 z-40 shrink-0",
+                                    "h-full bg-background dark:bg-[#1F1F1F] border-l border-border/50 z-40 shrink-0",
                                     "transition-[width] duration-300 ease-in-out overflow-hidden",
                                     isQaListOpen ? "w-80" : "w-0"
                                 )}

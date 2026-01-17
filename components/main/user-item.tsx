@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { ChevronsLeftRight } from "lucide-react";
 
@@ -21,22 +22,25 @@ export const UserItem = () => {
     router.push("/");
   }
 
+  // Generate pixel-art avatar URL if no user image is present
+  const avatarUrl = session?.user?.image || `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(session?.user?.name || "User")}`;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <div
           role="button"
-          className="flex items-center text-sm p-3 w-full hover:bg-primary/5"
+          className="flex items-center text-[13px] px-2 py-1.5 w-full hover:bg-primary/5 rounded-sm pr-8"
         >
-          <div className="gap-x-2 flex items-center max-w-[150px]">
-            <Avatar className="h-5 w-5">
-              <AvatarImage src={session?.user?.image || ""} />
+          <div className="gap-x-1.5 flex items-center flex-1 min-w-0">
+            <Avatar className="h-4 w-4 rounded-md">
+              <AvatarImage src={avatarUrl} />
             </Avatar>
-            <span className="text-start font-medium line-clamp-1">
+            <span className="text-start font-medium line-clamp-1 truncate">
               {session?.user?.name}&apos;s Rhizo
             </span>
           </div>
-          <ChevronsLeftRight className="rotate-90 ml-2 text-muted-foreground h-4 w-4" />
+          <ChevronsLeftRight className="rotate-90 ml-1.5 text-muted-foreground h-3 w-3 shrink-0" />
         </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -51,8 +55,8 @@ export const UserItem = () => {
           </p>
           <div className="flex items-center gap-x-2">
             <div className="rounded-md bg-secondary p-1">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={session?.user?.image || ""} />
+              <Avatar className="h-8 w-8 rounded-md">
+                <AvatarImage src={avatarUrl} />
               </Avatar>
             </div>
             <div className="space-y-1">

@@ -137,35 +137,35 @@ export const Item = ({
     <div
       onClick={onClick}
       role="button"
-      style={{ paddingLeft: level ? `${level * 12 + 12}px` : "12px" }}
+      style={{ paddingLeft: level ? `${level * 10 + 8}px` : "8px" }}
       className={cn(
-        "group min-h[27px]  text=-sm py-1 pr-3 w-full hover:bg-primary/5 flex items-center text-muted-foreground font-medium",
-        active && "bg-primary/5 text-primary",
+        "group min-h-[26px] text-[13px] py-0.5 pr-2 w-full hover:bg-primary/5 flex items-center text-muted-foreground font-normal rounded-sm",
+        active && "bg-primary/5 text-primary font-medium",
       )}
     >
       {!!id && (
         <div
           role="button"
-          className="h-full rounded-sm hover:bg-neutral-300  dark:hover:bg-neutral-600 mr-1"
+          className="h-full rounded-sm hover:bg-neutral-300 dark:hover:bg-neutral-600 mr-0.5"
           onClick={handleExpand}
         >
-          <ChevronIcon className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+          <ChevronIcon className="h-[16px] w-[16px] shrink-0 text-muted-foreground/50" />
         </div>
       )}
 
       {documentIcon ? (
-        <div className="shrink-0 h-[18px]">{documentIcon}</div>
+        <div className="shrink-0 h-[16px] mr-1.5">{documentIcon}</div>
       ) : (
-        <Icon className="shrink-0 h-[18px] w-[18px] mr-2 text-muted-foreground" />
+        <Icon className="shrink-0 h-[16px] w-[16px] mr-1.5 text-muted-foreground" />
       )}
-      <span className="truncate">{label}</span>
+      <span className="truncate flex-1 min-w-0 text-left">{label}</span>
       {isSearch && (
-        <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+        <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 shrink-0">
           <span className="text-xs">CTRL</span> + K
         </kbd>
       )}
       {!!id && (
-        <div className="ml-auto flex items-center gap-x-2">
+        <div className="ml-auto flex items-center gap-x-2 shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger onClick={(e) => e.stopPropagation()} asChild>
               <div

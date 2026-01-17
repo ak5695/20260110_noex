@@ -103,10 +103,7 @@ export const Navigation = () => {
   const handleCreate = () => {
     const tempId = crypto.randomUUID();
 
-    // ⚡ CRITICAL: Immediate Jump
-    router.push(`/documents/${tempId}`);
-
-    // ⚡ Phase 2: Client-side Cache Seeding (Optimistic)
+    // ⚡ Phase 1: Optimistic sidebar update FIRST (instant highlight)
     if (session?.user) {
       const optimisticDoc = {
         id: tempId,
@@ -121,27 +118,25 @@ export const Navigation = () => {
 
       setDocument(optimisticDoc);
 
-      // ⚡ Phase 2.5: Sidebar Optimism
+      // ⚡ Sidebar list update
       mutate(["documents", undefined], (current: any) => {
         return [optimisticDoc, ...(current || [])];
       }, false);
     }
 
-    // 2. Background Creation (Non-blocking)
-    const createPromise = create({
+    // ⚡ Phase 2: Immediate Jump (no waiting)
+    router.push(`/documents/${tempId}`);
+
+    // ⚡ Phase 3: Silent background creation (no toast)
+    create({
       id: tempId,
       title: "Untitled"
-    });
-
-    createPromise.then(() => {
+    }).then(() => {
       window.dispatchEvent(new CustomEvent("documents-changed"));
-    });
-
-    toast.promise(createPromise, {
-      loading: "Initializing note...",
-      success: "Note ready",
-      error: "Sync failed - please refresh",
-      id: "create-doc"
+    }).catch((error) => {
+      // Only show toast on error
+      toast.error("Failed to save note - please refresh");
+      console.error("[Create] Error:", error);
     });
   };
 
@@ -160,33 +155,49 @@ export const Navigation = () => {
       <aside
         ref={sidebarRef}
         className={cn(
-          "group/sidebar h-full bg-secondary overflow-y-auto relative flex w-60 flex-col z-[99999]",
+          "group/sidebar h-full bg-secondary relative flex w-60 flex-col z-[99999] overflow-hidden",
           isResetting && "transition-all ease-in-out duration-300",
           isMobile && "w-0",
         )}
       >
+        {/* Collapse Button */}
         <div
           role="button"
           onClick={collapse}
           className={cn(
-            "h-6 w-6 text-muted-foreground rounded-sm hover:bg-neutral-300 dark:hover:bg-neutral-600 absolute top-3 right-2 transition cursor-pointer",
+            "h-5 w-5 text-muted-foreground rounded-sm hover:bg-neutral-300 dark:hover:bg-neutral-600 absolute top-3.5 right-2 transition cursor-pointer",
             isMobile && "opacity-100",
           )}
         >
-          <ChevronLeft className="h-6 w-6" />
+          <ChevronLeft className="h-5 w-5" />
         </div>
-        <div>
+
+        {/* Fixed Header - Does NOT scroll */}
+        <div className="shrink-0 px-1 py-2">
           <UserItem />
-          <Item onClick={search.onOpen} label="Search" icon={Search} isSearch />
+          <Item
+            onClick={search.onOpen}
+            label="Search"
+            icon={Search}
+            isSearch={!isMobile && width > 320}
+          />
           <Item onClick={settings.onOpen} label="Settings" icon={Settings} />
           <Item onClick={handleCreate} label="New Page" icon={PlusCircle} />
-          <Item onClick={() => router.push("/canvas")} label="Canvas" icon={Palette} />
         </div>
-        <div className="mt-4">
+
+        {/* Separator */}
+        <div className="shrink-0 mx-3 border-t border-border/40" />
+
+        {/* Scrollable Document List */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-1 py-2 custom-scrollbar">
           <DocumentList />
+        </div>
+
+        {/* Fixed Footer - Does NOT scroll */}
+        <div className="shrink-0 px-1 py-2 border-t border-border/40">
           <Item onClick={handleCreate} label="Add a Page" icon={Plus} />
           <Popover>
-            <PopoverTrigger className="w-full mt-4">
+            <PopoverTrigger className="w-full">
               <Item label="Trash" icon={Trash} />
             </PopoverTrigger>
             <PopoverContent
@@ -197,6 +208,8 @@ export const Navigation = () => {
             </PopoverContent>
           </Popover>
         </div>
+
+        {/* Resize Handle */}
         <div
           onMouseDown={handleMouseDown}
           onClick={expand}

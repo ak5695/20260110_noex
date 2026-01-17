@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { getById } from "@/actions/documents";
 import { Title } from "@/components/main/title";
 import { Banner } from "@/components/main/banner";
@@ -74,36 +75,41 @@ export const Navbar = ({ initialData, isCanvasOpen, onToggleCanvas, isOutlineOpe
             <Menu documentId={document.id} />
             {onToggleOutline && (
               <>
-                <Button
-                  size="sm"
-                  variant="ghost"
+                <div
+                  role="button"
                   onClick={() => {
                     import("@/store/use-layout-store").then(({ useLayoutStore }) => {
                       useLayoutStore.getState().toggleQaList();
                     });
                   }}
-                  className="text-muted-foreground"
+                  className="h-6 w-6 flex items-center justify-center rounded-sm hover:bg-neutral-300 dark:hover:bg-neutral-600 text-muted-foreground cursor-pointer transition"
                 >
                   <HelpCircle className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
+                </div>
+                <div
+                  role="button"
                   onClick={onToggleOutline}
-                  className={isOutlineOpen ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : ""}
+                  className={cn(
+                    "h-6 w-6 flex items-center justify-center rounded-sm hover:bg-neutral-300 dark:hover:bg-neutral-600 text-muted-foreground cursor-pointer transition",
+                    isOutlineOpen && "bg-neutral-300 dark:bg-neutral-600 text-primary"
+                  )}
                 >
                   <List className="h-4 w-4" />
-                </Button>
+                </div>
               </>
             )}
             {onToggleCanvas && (
-              <Button size="sm" variant="ghost" onClick={onToggleCanvas}>
+              <div
+                role="button"
+                onClick={onToggleCanvas}
+                className="h-6 w-6 flex items-center justify-center rounded-sm hover:bg-neutral-300 dark:hover:bg-neutral-600 text-muted-foreground cursor-pointer transition"
+              >
                 {isCanvasOpen ? (
                   <ChevronsRight className="h-4 w-4" />
                 ) : (
                   <ChevronsLeft className="h-4 w-4" />
                 )}
-              </Button>
+              </div>
             )}
           </div>
         </div>

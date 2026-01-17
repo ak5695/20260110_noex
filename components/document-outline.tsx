@@ -115,7 +115,7 @@ export const DocumentOutline = ({ className, onClose }: DocumentOutlineProps) =>
   }
 
   return (
-    <div className={cn("flex flex-col h-full bg-background/95 backdrop-blur", className)}>
+    <div className={cn("flex flex-col h-full", className)}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <List className="h-4 w-4" />
