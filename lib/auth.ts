@@ -11,6 +11,12 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true
     },
+    account: {
+        autoLink: {
+            enabled: true,
+            requiredEmailVerification: false,
+        }
+    },
     socialProviders: {
         google: {
             clientId: process.env.GOOGLE_CLIENT_ID as string,
