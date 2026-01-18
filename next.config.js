@@ -20,8 +20,8 @@ const nextConfig = {
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
+  reactStrictMode: false,
   experimental: {
-    reactStrictMode: false,
     // missingSuspenseWithCSRBailout: false,
   },
   // Force restart: 2026-01-17-fix-hmr

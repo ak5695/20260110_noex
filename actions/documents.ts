@@ -486,15 +486,3 @@ export const getLastActive = async () => {
     return data[0] || null
 }
 
-export const getRedirectUrl = async () => {
-    const user = await getUser()
-    if (!user) return "/documents" // Fallback
-
-    const lastActive = await getLastActive()
-    if (lastActive) {
-        return `/documents/${lastActive.id}`
-    }
-
-    const newDoc = await create({ title: "Untitled" })
-    return `/documents/${newDoc.id}`
-}

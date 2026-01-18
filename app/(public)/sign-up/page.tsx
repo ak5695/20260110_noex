@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 
 import { authClient } from "@/lib/auth-client";
-import { getRedirectUrl } from "@/actions/documents";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +20,7 @@ export default function SignUp() {
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [socialLoading, setSocialLoading] = useState<"google" | "github" | null>(null);
+    const [socialLoading, setSocialLoading] = useState<"google" | "github" | "notion" | null>(null);
     const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
     const [turnstileLoading, setTurnstileLoading] = useState(true);
     const turnstileRef = useRef<TurnstileInstance>(null);
@@ -53,13 +52,7 @@ export default function SignUp() {
 
         if (data) {
             toast.success("Account created!");
-            try {
-                const url = await getRedirectUrl();
-                router.push(url);
-            } catch (error) {
-                router.push("/documents");
-            }
-            router.refresh();
+            router.push("/documents");
         }
         if (error) {
             toast.error(error.message || "Failed to create account");
@@ -70,7 +63,7 @@ export default function SignUp() {
         setLoading(false);
     };
 
-    const signUpWithSocial = async (provider: "google" | "github") => {
+    const signUpWithSocial = async (provider: "google" | "github" | "notion") => {
         setSocialLoading(provider);
         try {
             await authClient.signIn.social({
@@ -133,8 +126,8 @@ export default function SignUp() {
                         </p>
                     </div>
 
-                    {/* Social Login - Side by Side */}
-                    <div className="grid grid-cols-2 gap-3 mb-6">
+                    {/* Social Login - Three columns */}
+                    <div className="grid grid-cols-3 gap-3 mb-6">
                         <SocialButton
                             provider="google"
                             onClick={() => signUpWithSocial("google")}
@@ -143,6 +136,11 @@ export default function SignUp() {
                         <SocialButton
                             provider="github"
                             onClick={() => signUpWithSocial("github")}
+                            disabled={!!socialLoading || loading}
+                        />
+                        <SocialButton
+                            provider="notion"
+                            onClick={() => signUpWithSocial("notion")}
                             disabled={!!socialLoading || loading}
                         />
                     </div>
@@ -298,11 +296,11 @@ export default function SignUp() {
                 {/* Legal Text */}
                 <p className="text-center text-xs text-muted-foreground mt-4">
                     By signing up, you agree to our{" "}
-                    <Link href="#" className="underline hover:text-foreground">
+                    <Link href="/terms" className="underline hover:text-foreground">
                         Terms
                     </Link>{" "}
                     and{" "}
-                    <Link href="#" className="underline hover:text-foreground">
+                    <Link href="/privacy" className="underline hover:text-foreground">
                         Privacy
                     </Link>
                 </p>

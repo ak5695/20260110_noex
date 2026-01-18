@@ -20,6 +20,10 @@ export const auth = betterAuth({
             clientId: process.env.GITHUB_CLIENT_ID as string,
             clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
         },
+        notion: {
+            clientId: process.env.NOTION_CLIENT_ID as string,
+            clientSecret: process.env.NOTION_CLIENT_SECRET as string,
+        },
     },
     trustedOrigins: [
         process.env.BETTER_AUTH_URL,

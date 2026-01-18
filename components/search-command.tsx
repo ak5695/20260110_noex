@@ -92,7 +92,7 @@ export const SearchCommand = () => {
     return () => document.removeEventListener("keydown", down);
   }, [toggle]);
 
-  // Memoized search results with content matching
+  // 1. All hooks (useState, useEffect, useMemo, etc.) MUST be called unconditionally
   const filteredDocuments = useMemo(() => {
     if (!documents) return [];
     if (!query.trim()) return documents.map(doc => ({ ...doc, matchType: "title" as const, contentSnippet: "" }));
@@ -134,6 +134,7 @@ export const SearchCommand = () => {
     onClose();
   };
 
+  // 2. Early return for hydration safety MUST be after ALL hooks
   if (!isMounted) return null;
 
   const placeholderText = session?.user?.name

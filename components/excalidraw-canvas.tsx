@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import "@excalidraw/excalidraw/index.css";
 import { useTheme } from "next-themes";
 import { Maximize, Minimize, Loader2 } from "lucide-react";
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, memo } from "react";
 import { DRAG_MIME_TYPE } from "@/lib/canvas/drag-drop-types";
 import { dragDropBridge } from "@/lib/canvas/drag-drop-bridge";
 import { v4 as uuidv4 } from "uuid";
@@ -70,7 +70,7 @@ interface Binding {
 
 // Note: CanvasBindingLayer removed - Excalidraw has native link indicators
 
-export const ExcalidrawCanvas = ({ documentId, className, onChange }: ExcalidrawCanvasProps) => {
+const ExcalidrawCanvasComponent = ({ documentId, className, onChange }: ExcalidrawCanvasProps) => {
     const { resolvedTheme } = useTheme();
     const [excalidrawAPI, setExcalidrawAPI] = useState<any>(null);
 
@@ -807,6 +807,8 @@ export const ExcalidrawCanvas = ({ documentId, className, onChange }: Excalidraw
         </div>
     );
 };
+
+export const ExcalidrawCanvas = memo(ExcalidrawCanvasComponent);
 
 export default ExcalidrawCanvas;
 

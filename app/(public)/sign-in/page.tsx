@@ -7,7 +7,6 @@ import Image from "next/image";
 import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
-import { getRedirectUrl } from "@/actions/documents";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +18,7 @@ export default function SignIn() {
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [socialLoading, setSocialLoading] = useState<"google" | "github" | null>(null);
+    const [socialLoading, setSocialLoading] = useState<"google" | "github" | "notion" | null>(null);
     const router = useRouter();
 
     const signInWithEmail = async () => {
@@ -36,13 +35,7 @@ export default function SignIn() {
 
         if (data) {
             toast.success("Welcome back!");
-            try {
-                const url = await getRedirectUrl();
-                router.push(url);
-            } catch (error) {
-                router.push("/documents");
-            }
-            router.refresh();
+            router.push("/documents");
         }
         if (error) {
             toast.error(error.message || "Invalid credentials");
@@ -50,7 +43,7 @@ export default function SignIn() {
         }
     };
 
-    const signInWithSocial = async (provider: "google" | "github") => {
+    const signInWithSocial = async (provider: "google" | "github" | "notion") => {
         setSocialLoading(provider);
         try {
             await authClient.signIn.social({
@@ -113,8 +106,8 @@ export default function SignIn() {
                         </p>
                     </div>
 
-                    {/* Social Login - Side by Side */}
-                    <div className="grid grid-cols-2 gap-3 mb-6">
+                    {/* Social Login - Three columns */}
+                    <div className="grid grid-cols-3 gap-3 mb-6">
                         <SocialButton
                             provider="google"
                             onClick={() => signInWithSocial("google")}
@@ -123,6 +116,11 @@ export default function SignIn() {
                         <SocialButton
                             provider="github"
                             onClick={() => signInWithSocial("github")}
+                            disabled={!!socialLoading || loading}
+                        />
+                        <SocialButton
+                            provider="notion"
+                            onClick={() => signInWithSocial("notion")}
                             disabled={!!socialLoading || loading}
                         />
                     </div>
@@ -217,11 +215,11 @@ export default function SignIn() {
                 {/* Legal Text */}
                 <p className="text-center text-xs text-muted-foreground mt-4">
                     By signing in, you agree to our{" "}
-                    <Link href="#" className="underline hover:text-foreground">
+                    <Link href="/terms" className="underline hover:text-foreground">
                         Terms
                     </Link>{" "}
                     and{" "}
-                    <Link href="#" className="underline hover:text-foreground">
+                    <Link href="/privacy" className="underline hover:text-foreground">
                         Privacy
                     </Link>
                 </p>
