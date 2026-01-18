@@ -11,8 +11,8 @@ export const user = pgTable("user", {
     password: text("password"),
     role: text("role").notNull().default("user"),
     banned: boolean("banned").notNull().default(false),
-    banReason: text("banReason"),
-    banExpires: timestamp("banExpires"),
+    banReason: text("ban_reason"),
+    banExpires: timestamp("ban_expires"),
     createdAt: timestamp("created_at").notNull(),
     updatedAt: timestamp("updated_at").notNull()
 });
@@ -221,7 +221,7 @@ export const semanticEdgesRelations = relations(semanticEdges, ({ one }) => ({
 export const waitlist = pgTable("waitlist", {
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull().unique(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const qaItems = pgTable("qa_items", {
