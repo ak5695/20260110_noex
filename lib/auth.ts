@@ -18,20 +18,6 @@ export const auth = betterAuth({
             allowDifferentEmails: true,
         }
     },
-    databaseHooks: {
-        user: {
-            create: {
-                before: async (user) => {
-                    return {
-                        data: {
-                            ...user,
-                            emailVerified: true,
-                        },
-                    };
-                },
-            },
-        },
-    },
     socialProviders: {
         google: {
             clientId: process.env.GOOGLE_CLIENT_ID as string,
